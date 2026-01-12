@@ -130,6 +130,19 @@ The transliteration engine (`FinglishConverter`) processes input through multipl
 
 Each step adds suggestions, with duplicates filtered and results limited to top 5.
 
+## Known Issues & Fixes
+
+### Short Input Crash (Fixed)
+**Bug:** App crashed immediately when typing 1-2 characters.
+**Cause:** `tryCompoundMatch` created invalid range `2..<0` for short inputs.
+**Fix:** Added guard clause: `guard lowered.count >= 3 else { return nil }`
+
+### Important Implementation Notes
+- **Keyboard extensions have strict memory limits (~30MB)** - keep dictionaries reasonably sized
+- **Always validate range bounds** before creating Swift ranges - `2..<min(count-1, 6)` crashes if count < 3
+- **Test with single character inputs** - easy to miss edge cases
+- **Duplicate dictionary keys** cause warnings but don't crash - still fix them for clean builds
+
 ## App Store Submission
 
 ```bash
@@ -137,3 +150,15 @@ Each step adds suggestions, with duplicates filtered and results limited to top 
 xcodebuild -scheme FinglishKeyboard archive -archivePath /tmp/FinglishKeyboard.xcarchive -allowProvisioningUpdates
 xcodebuild -exportArchive -archivePath /tmp/FinglishKeyboard.xcarchive -exportPath /tmp/FinglishExport -exportOptionsPlist /tmp/ExportOptions.plist -allowProvisioningUpdates
 ```
+
+## Xcode Cloud Auto-Deploy
+
+To enable automatic TestFlight deployment on every push:
+
+1. Open Xcode → Product → Xcode Cloud → Manage Workflows
+2. Select your workflow → Edit
+3. Scroll to **Post-Actions**
+4. Click **+** → Select **"TestFlight Internal Testing"**
+5. Save
+
+Now every push to `main` automatically builds and uploads to TestFlight.
