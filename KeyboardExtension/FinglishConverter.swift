@@ -46,6 +46,58 @@ class FinglishConverter {
         ("an", "ن"),
     ]
 
+    // Past tense stems (for verbs without mi- prefix)
+    private let pastTenseStems: [String: String] = [
+        // Common past tense verb stems
+        "raft": "رفت", "rft": "رفت",
+        "amad": "آمد", "omad": "اومد", "umad": "اومد",
+        "kard": "کرد", "krd": "کرد",
+        "goft": "گفت", "gft": "گفت",
+        "did": "دید",
+        "khord": "خورد", "khrd": "خورد",
+        "shenid": "شنید", "shnid": "شنید",
+        "fahmid": "فهمید", "fhmid": "فهمید",
+        "gereft": "گرفت", "greft": "گرفت", "grift": "گرفت",
+        "nevesht": "نوشت", "nevsht": "نوشت",
+        "khund": "خوند", "khand": "خواند",
+        "resid": "رسید", "rsid": "رسید",
+        "shod": "شد", "shud": "شد",
+        "bud": "بود", "bood": "بود",
+        "dasht": "داشت", "dsht": "داشت",
+        "khast": "خواست", "khst": "خواست",
+        "zad": "زد",
+        "keshid": "کشید", "kshid": "کشید",
+        "doshid": "دوشید",
+        "posht": "پوشت", "pushid": "پوشید",
+        "gozasht": "گذاشت", "gzasht": "گذاشت",
+        "afgand": "افکند", "andakht": "انداخت",
+        "sakht": "ساخت",
+        "bastan": "بست", "bast": "بست",
+        "shost": "شست",
+        "mord": "مرد", "murd": "مرد",
+        "zist": "زیست",
+        "kharid": "خرید", "khrid": "خرید",
+        "forukht": "فروخت",
+        "avord": "آورد", "oovord": "اوورد",
+        "bord": "برد",
+        "khaband": "خوابوند", "khabid": "خوابید",
+        "neshast": "نشست", "nshast": "نشست",
+        "istad": "ایستاد", "vastad": "وایستاد",
+        "tarsid": "ترسید",
+        "khandid": "خندید",
+        "gerist": "گریست",
+        "oftad": "افتاد",
+        "parid": "پرید",
+        "david": "دوید",
+    ]
+
+    // Imperative prefixes and patterns
+    private let imperativePrefixes: [(finglish: String, farsi: String)] = [
+        ("be", "ب"),
+        ("bo", "ب"),
+        ("na", "ن"),  // Negative imperative
+    ]
+
     // Noun/adjective suffixes
     private let nounSuffixes: [(finglish: String, farsi: String)] = [
         ("haye", "های"),
@@ -81,7 +133,7 @@ class FinglishConverter {
         "a": "آ", "ay": "آی", "ya": "یا", "amad": "آمد", "bia": "بیا",
         "bar": "بر", "bord": "برد", "bor": "بر",
         "pas": "پس", "pasand": "پسند",
-        "gard": "گرد", "gardid": "گردید", "gasht": "گشت", "gard": "گرد",
+        "gard": "گرد", "gardid": "گردید", "gasht": "گشت",
         "oft": "افت", "oftad": "افتاد", "riz": "ریز",
         "par": "پر", "parid": "پرید", "kiz": "خیز", "khiz": "خیز",
         "dav": "دو", "david": "دوید", "dow": "دو",
@@ -94,7 +146,7 @@ class FinglishConverter {
         "dan": "دان", "dun": "دون", "don": "دون", "danest": "دانست",
         "fekr": "فکر", "andish": "اندیش", "andishid": "اندیشید",
         "yad": "یاد", "yadgir": "یادگیر",
-        "shenakh": "شناخ", "shenas": "شناس",
+        "shenakh": "شناخت", "shenas": "شناس",
 
         // === COMMUNICATION ===
         "g": "گ", "gu": "گو", "go": "گو", "goo": "گو", "goft": "گفت",
@@ -119,7 +171,6 @@ class FinglishConverter {
         "de": "ده", "deh": "ده", "dad": "داد", "dadan": "دادن",
         "khast": "خواست", "kha": "خوا",
         "bast": "بست", "band": "بند",
-        "shenakh": "شناخت", "shenas": "شناس",
         "chasb": "چسب", "chasbid": "چسبید", "chasband": "چسباند",
         "kash": "کش", "kashid": "کشید",
         "feshar": "فشار", "feshord": "فشرد",
@@ -135,8 +186,7 @@ class FinglishConverter {
 
         // === ABILITY & PERMISSION ===
         "tun": "تون", "ton": "تون", "tavan": "توان", "tunesht": "تونست", "tavanest": "توانست",
-        "bud": "باید",
-        "sho": "شو",
+        "bayad": "باید",
 
         // === SLEEP & REST ===
         "khab": "خواب", "khabid": "خوابید", "khoft": "خفت",
@@ -146,7 +196,7 @@ class FinglishConverter {
 
         // === EMOTIONS ===
         "tars": "ترس", "tarsid": "ترسید",
-        "khand": "خند", "khandid": "خندید",
+        "khandid": "خندید",
         "gerye": "گریه", "gerist": "گریست", "geri": "گری",
         "ashegh": "عاشق", "eshgh": "عشق",
         "dard": "درد", "kesh": "کش",
@@ -156,7 +206,7 @@ class FinglishConverter {
 
         // === WORK & PRODUCTION ===
         "saz": "ساز", "sakht": "ساخت",
-        "bar": "بار", "barid": "بارید",
+        "barid": "بارید",
         "kand": "کند", "kandeh": "کنده",
         "afarin": "آفرین", "afarid": "آفرید",
         "parvand": "پرورد", "parvar": "پرور",
@@ -164,7 +214,7 @@ class FinglishConverter {
 
         // === OPENING & CLOSING ===
         "baz": "باز", "bastan": "بستن",
-        "band": "بند", "bastand": "بستند",
+        "bastand": "بستند",
         "vaz": "واز",
 
         // === CLEANING & APPEARANCE ===
@@ -174,7 +224,7 @@ class FinglishConverter {
         "posh": "پوش", "pushid": "پوشید", "push": "پوش",
 
         // === SEARCHING & FINDING ===
-        "gard": "گرد", "gardesh": "گردش",
+        "gardesh": "گردش",
         "juy": "جو", "jost": "جست", "joy": "جوی",
         "yab": "یاب", "yaft": "یافت",
         "peyda": "پیدا",
@@ -182,10 +232,9 @@ class FinglishConverter {
         // === SENDING & RECEIVING ===
         "ferest": "فرست", "ferestad": "فرستاد",
         "rasid": "رسید", "res": "رس", "ras": "رس",
-        "gozasht": "گذشت",
 
         // === LIVING & LIFE ===
-        "zist": "زیست", "zindigii": "زندگی",
+        "zindigii": "زندگی",
         "mord": "مرد", "mir": "میر", "mur": "مور",
         "kushit": "کشت", "kosh": "کش",
 
@@ -198,9 +247,8 @@ class FinglishConverter {
         // === COLLOQUIAL STEMS ===
         "pich": "پیچ", "pichid": "پیچید", "pichund": "پیچوند",
         "chin": "چین", "chid": "چید",
-        "gar": "گر", "gir": "گیر",
         "kub": "کوب", "kubid": "کوبید",
-        "bor": "بر", "borid": "برید", "burid": "برید",
+        "borid": "برید", "burid": "برید",
         "doz": "دوز", "dukht": "دوخت", "dookht": "دوخت",
         "kes": "کس", "kesid": "کسید",
         "vel": "ول", "volkon": "ول‌کن",
@@ -358,13 +406,55 @@ class FinglishConverter {
     private let alternativeMappings: [Character: [String]] = [
         "a": ["ا", "آ", "ع", "ه"],
         "e": ["ه", "ی", "ع", "ا"],
-        "o": ["و", "ا"],
+        "o": ["و", "ا", "ُ"],
+        "i": ["ی", "ای", "ئی"],
+        "u": ["و", "او"],
         "s": ["س", "ص", "ث"],
         "z": ["ز", "ض", "ظ", "ذ"],
         "t": ["ت", "ط"],
-        "h": ["ه", "ح"],
-        "g": ["گ", "غ"],
-        "c": ["ک", "س"],
+        "h": ["ه", "ح", "خ"],
+        "g": ["گ", "غ", "ق"],
+        "c": ["ک", "س", "چ"],
+        "q": ["ق", "غ"],
+    ]
+
+    // Colloquial/informal verb transformations (formal -> colloquial)
+    private let colloquialTransforms: [(formal: String, colloquial: String, farsi: String)] = [
+        // Common colloquial shortenings
+        ("mikhaham", "mikham", "می‌خوام"),
+        ("midaham", "midam", "می‌دم"),
+        ("miravam", "miram", "می‌رم"),
+        ("miayam", "miam", "می‌آم"),
+        ("mibinam", "mibinam", "می‌بینم"),
+        ("mikunam", "mikonam", "می‌کنم"),
+        ("miguiam", "migam", "می‌گم"),
+        ("midanam", "midoonam", "می‌دونم"),
+        ("mitavanam", "mitoonam", "می‌تونم"),
+
+        // Colloquial "oo" for "a" patterns
+        ("khane", "khune", "خونه"),
+        ("name", "esme", "اسمه"),
+        ("daneshgah", "daneshga", "دانشگا"),
+        ("an", "un", "اون"),
+        ("anha", "una", "اونا"),
+        ("inja", "inja", "اینجا"),
+        ("unja", "unja", "اونجا"),
+
+        // Past tense colloquial
+        ("amadam", "omadam", "اومدم"),
+        ("amadand", "omadan", "اومدن"),
+        ("goftam", "goftam", "گفتم"),
+        ("raftam", "raftam", "رفتم"),
+        ("kardam", "kardam", "کردم"),
+        ("didam", "didam", "دیدم"),
+
+        // Common expressions
+        ("hasti", "hasti", "هستی"),
+        ("hastam", "hastam", "هستم"),
+        ("nistam", "nistam", "نیستم"),
+        ("nadaram", "nadaram", "ندارم"),
+        ("nemidanam", "nemidoonam", "نمی‌دونم"),
+        ("nemitavanam", "nemitoonam", "نمی‌تونم"),
     ]
 
     // Persian numbers
@@ -379,7 +469,7 @@ class FinglishConverter {
 
     private let typoCorrections: [String: String] = [
         // === GREETINGS ===
-        "slm": "salam", "slaam": "salam", "salma": "salam", "slaam": "salam",
+        "slm": "salam", "slaam": "salam", "salma": "salam",
         "slaaam": "salam", "salm": "salam", "slam": "salam",
         "mrc": "merci", "mrsi": "mersi", "mers": "mersi", "merc": "merci",
         "mersy": "mersi", "mercy": "merci", "marsi": "mersi",
@@ -398,21 +488,20 @@ class FinglishConverter {
         "chetri": "chetori", "chtori": "chetori", "chetory": "chetori",
         "chetooori": "chetori", "chtoori": "chetori", "chetoor": "chetor",
         "chtoor": "chetor", "chtory": "chetori",
-        "khbi": "khobi", "khoobi": "khobi", "khobi": "khobi",
+        "khbi": "khobi", "khoobi": "khobi",
         "khub": "khob", "khb": "khob", "khoob": "khob",
-        "chera": "chera", "chera": "chera", "chra": "chera",
-        "cheraaa": "chera", "chr": "chera",
+        "chra": "chera", "cheraaa": "chera", "chr": "chera",
         "keii": "key", "kii": "key", "kay": "key",
-        "koja": "koja", "koj": "koja", "kojaaa": "koja",
+        "koj": "koja", "kojaaa": "koja",
         "kji": "koji", "kojast": "kojast",
-        "chi": "chi", "chii": "chi", "chiii": "chi",
+        "chii": "chi", "chiii": "chi",
         "chish": "chish", "chishe": "chisheh",
-        "kist": "kist", "kiist": "kist",
-        "kia": "kia", "kiaa": "kia",
+        "kiist": "kist",
+        "kiaa": "kia",
 
         // === COMMON VERBS - PRESENT ===
         "mikahm": "mikham", "mikhm": "mikham", "mkhm": "mikham",
-        "mikahm": "mikham", "mikha": "mikham", "mikhaam": "mikham",
+        "mikha": "mikham", "mikhaam": "mikham",
         "mirm": "miram", "miraam": "miram",
         "mknm": "mikonam", "miknam": "mikonam", "mikonm": "mikonam",
         "mkunam": "mikonam", "mkonm": "mikonam",
@@ -420,17 +509,16 @@ class FinglishConverter {
         "midoonm": "midoonam", "mdoonam": "midoonam",
         "mtunm": "mitoonam", "mtnm": "mitoonam", "mitunam": "mitoonam",
         "mitoonm": "mitoonam", "mtoonam": "mitoonam",
-        "miyam": "miam", "miyaam": "miam", "miam": "miam",
+        "miyam": "miam", "miyaam": "miam",
         "myam": "miam", "miaam": "miam",
-        "migam": "migam", "migm": "migam", "mygam": "migam",
+        "migm": "migam", "mygam": "migam",
         "mibinm": "mibinam", "mibinaam": "mibinam",
         "mishnvam": "mishnevam", "mishnavm": "mishnevam",
         "mifhmm": "mifahmam", "mifahmm": "mifahmam",
         "mikhorm": "mikhoram", "mkhoram": "mikhoram",
         "minvisam": "minevisam", "minvisaam": "minevisam",
-        "migiram": "migiram", "migirm": "migiram",
-        "miresam": "miresam", "miresm": "miresam",
-        "miram": "miram", "miraam": "miram",
+        "migirm": "migiram",
+        "miresm": "miresam",
         "mishm": "misham", "mishaam": "misham",
 
         // === COMMON VERBS - PAST ===
@@ -446,7 +534,7 @@ class FinglishConverter {
         "nevshtm": "neveshtam", "neveshta": "neveshtam",
         "rsidm": "residam", "residm": "residam",
         "shodm": "shodam", "shudm": "shodam", "shdm": "shodam",
-        "mundam": "mundam", "mundom": "mundam", "mandom": "mandam",
+        "mundom": "mundam", "mandom": "mandam",
 
         // === COMMON VERBS - NEGATIVE ===
         "nmidunam": "nemidoonam", "nmidunm": "nemidoonam", "nemidonam": "nemidoonam",
@@ -461,54 +549,54 @@ class FinglishConverter {
         "nmishm": "nemisham", "nemishaam": "nemisham",
 
         // === COMMON WORDS ===
-        "inja": "inja", "inj": "inja", "injaa": "inja",
+        "inj": "inja", "injaa": "inja",
         "unjaa": "unja", "unj": "unja", "onja": "unja",
-        "alan": "alan", "alaan": "alan", "aln": "alan",
+        "alaan": "alan", "aln": "alan",
         "farad": "farda", "fardaa": "farda", "frda": "farda",
         "diiruz": "diruz", "diroz": "diruz", "druz": "diruz",
         "imruz": "emruz", "emrooz": "emruz", "imrooz": "emruz",
         "insha": "inshallah", "inshaallah": "inshallah", "inshala": "inshallah",
         "mashaalla": "mashallah", "mashaallah": "mashallah",
         "yarb": "yarabb", "yarab": "yarabb", "yaraab": "yarabb",
-        "khodam": "khodam", "khudaam": "khodam", "khdam": "khodam",
-        "oonaa": "oona", "oona": "oona", "unaa": "oona",
-        "inaa": "ina", "inha": "inha", "inhaa": "inha",
+        "khudaam": "khodam", "khdam": "khodam",
+        "oonaa": "oona", "unaa": "oona",
+        "inaa": "ina", "inhaa": "inha",
         "khane": "khaneh", "khuneh": "khuneh", "khoone": "khuneh",
         "ketaab": "ketab", "ktab": "ketab", "kitab": "ketab",
         "madrse": "madrese", "madrseh": "madrese", "madreseh": "madrese",
 
         // === ADJECTIVES ===
         "khoshgl": "khoshgel", "khoshgeel": "khoshgel", "khoshgol": "khoshgel",
-        "ghashang": "ghashang", "ghashng": "ghashang", "qashang": "ghashang",
+        "ghashng": "ghashang", "qashang": "ghashang",
         "zaleem": "zaalim", "zaalm": "zaalim", "zalim": "zaalim",
         "bade": "bad", "badd": "bad",
-        "khube": "khub", "khoobe": "khub", "khob": "khub",
-        "aalie": "aali", "aali": "aali", "aly": "aali",
+        "khube": "khub", "khoobe": "khub",
+        "aalie": "aali", "aly": "aali",
         "kucik": "kuchik", "kuchek": "kuchik", "koochik": "kuchik",
         "bzrg": "bozorg", "bozrg": "bozorg", "bozarg": "bozorg",
-        "jadid": "jadid", "jadeed": "jadid", "jdid": "jadid",
+        "jadeed": "jadid", "jdid": "jadid",
         "qadim": "ghadim", "ghadeem": "ghadim", "qdim": "ghadim",
-        "rahat": "rahat", "raahat": "rahat", "raht": "rahat",
-        "sakht": "sakht", "sakhtt": "sakht", "skht": "sakht",
+        "raahat": "rahat", "raht": "rahat",
+        "sakhtt": "sakht", "skht": "sakht",
         "asun": "asoon", "asaan": "asoon", "ason": "asoon",
 
         // === PRONOUNS ===
         "mn": "man", "maan": "man",
-        "too": "to", "tou": "to",
+        "tou": "to",
         "ooo": "oo", "ou": "oo", "un": "oon",
         "maa": "ma", "mah": "ma",
-        "shoma": "shoma", "shomaa": "shoma", "shma": "shoma",
-        "unaa": "oona", "unha": "oona", "onhaa": "oona",
+        "shomaa": "shoma", "shma": "shoma",
+        "unha": "oona", "onhaa": "oona",
 
         // === NUMBERS ===
         "yeki": "yek", "yekk": "yek",
-        "doo": "do", "dou": "do",
+        "dou": "do",
         "sre": "se", "seh": "se",
         "chhar": "chahar", "chaar": "chahar", "4ta": "chaharta",
-        "pnj": "panj", "panj": "panj",
-        "shish": "shesh", "shesh": "shesh",
+        "pnj": "panj",
+        "shish": "shesh",
         "haftt": "haft", "haff": "haft",
-        "hasht": "hasht", "hasth": "hasht",
+        "hasth": "hasht",
         "nooh": "noh", "nuh": "noh",
         "dahh": "dah", "deh": "dah",
 
@@ -516,7 +604,7 @@ class FinglishConverter {
         "bba": "baba", "babaa": "baba",
         "mma": "mama", "mamaan": "maman",
         "dadsh": "dadash", "daadash": "dadash", "dadaash": "dadash",
-        "abi": "abi", "abii": "abi", "aabji": "abji",
+        "abii": "abi", "aabji": "abji",
         "azizm": "azizam", "aziizm": "azizam", "azzzam": "azizam",
         "jonm": "jonam", "junam": "jonam", "joonam": "jonam",
         "dusset": "duset", "dooset": "duset", "doset": "duset",
@@ -525,14 +613,14 @@ class FinglishConverter {
         "tangt": "tangat", "tengit": "tangit",
         "khstm": "khastam", "khaste": "khaste",
         "bisho": "besho", "bsho": "besho",
-        "boro": "boro", "bro": "boro", "borro": "boro",
+        "bro": "boro", "borro": "boro",
         "biya": "bia", "byia": "bia", "biaa": "bia",
-        "bezar": "bezar", "bzar": "bezar", "bozar": "bezar",
+        "bzar": "bezar", "bozar": "bezar",
         "nagoo": "nagu", "nago": "nagu", "ngu": "nagu",
-        "bebin": "bebin", "bbin": "bebin", "bbiin": "bebin",
-        "chkar": "chikar", "chikaar": "chikar", "chkar": "chikar",
+        "bbin": "bebin", "bbiin": "bebin",
+        "chkar": "chikar", "chikaar": "chikar",
         "kojii": "koji", "kojaayi": "kojayi", "kojay": "kojayi",
-        "kosh": "kojayi", "koj": "koja",
+        "kosh": "kojayi",
 
         // === INTERNET/TEXT SLANG ===
         "tnx": "mamnoon", "tx": "mamnoon", "thx": "mamnoon",
@@ -555,7 +643,7 @@ class FinglishConverter {
         "asap": "harchezotar",
 
         // === COMMON MISTAKES (keyboard adjacency) ===
-        "salma": "salam", "sakam": "salam",
+        "sakam": "salam",
         "mwrsi": "mersi", "nersi": "mersi",
         "khobu": "khobi", "khonu": "khobi",
         "chetoru": "chetori", "chetoei": "chetori",
@@ -594,7 +682,12 @@ class FinglishConverter {
         // 1. Apply typo correction if available
         let corrected = typoCorrections[lowercased] ?? lowercased
 
-        // 2. Dictionary lookup (highest priority)
+        // 2. Check for direct colloquial match first (highest priority for common verbs)
+        if let colloquialMatch = tryColloquialMatch(corrected) {
+            addSuggestion(colloquialMatch)
+        }
+
+        // 3. Dictionary lookup (highest priority)
         let dictMatches = dictionary.findMatches(for: corrected)
         for match in dictMatches {
             addSuggestion(match)
@@ -608,32 +701,32 @@ class FinglishConverter {
             }
         }
 
-        // 3. Check for compound word matches
+        // 4. Check for compound word matches
         if let compoundResult = tryCompoundMatch(corrected) {
             addSuggestion(compoundResult)
         }
 
-        // 4. Smart morphological transliteration
+        // 5. Smart morphological transliteration
         let morphResult = morphologicalTransliterate(corrected)
         addSuggestion(morphResult)
 
-        // 5. Context-aware transliteration
+        // 6. Context-aware transliteration
         let contextResult = contextAwareTransliterate(corrected)
         if contextResult != morphResult {
             addSuggestion(contextResult)
         }
 
-        // 6. Generate phonetic variants
+        // 7. Generate phonetic variants
         let variants = generatePhoneticVariants(corrected)
         for variant in variants {
             addSuggestion(variant)
         }
 
-        // 7. Simple fallback transliteration
+        // 8. Simple fallback transliteration
         let simpleResult = simpleTransliterate(corrected)
         addSuggestion(simpleResult)
 
-        // 8. Try word ending patterns (for loanwords)
+        // 9. Try word ending patterns (for loanwords)
         if let endingResult = tryWordEndingPattern(corrected) {
             addSuggestion(endingResult)
         }
@@ -693,6 +786,27 @@ class FinglishConverter {
         return nil
     }
 
+    /// Tries to match colloquial verb forms
+    private func tryColloquialMatch(_ input: String) -> String? {
+        let lowered = input.lowercased()
+
+        // Direct match on colloquial forms
+        for (_, colloquial, farsi) in colloquialTransforms {
+            if lowered == colloquial {
+                return farsi
+            }
+        }
+
+        // Also match formal forms and return farsi
+        for (formal, _, farsi) in colloquialTransforms {
+            if lowered == formal {
+                return farsi
+            }
+        }
+
+        return nil
+    }
+
     // ============================================
     // MORPHOLOGICAL TRANSLITERATION
     // ============================================
@@ -702,52 +816,101 @@ class FinglishConverter {
         var word = input.lowercased()
         var prefix = ""
         var suffix = ""
+        var isImperative = false
+        var isPastTense = false
 
-        // 1. Extract verb prefix
-        for (finglish, farsi) in verbPrefixes {
+        // 1. Check for imperative prefix first (be-, bo-, na-)
+        for (finglish, farsi) in imperativePrefixes {
             if word.hasPrefix(finglish) && word.count > finglish.count + 1 {
-                prefix = farsi
-                word = String(word.dropFirst(finglish.count))
-                break
+                // Check if remainder looks like a verb stem
+                let remainder = String(word.dropFirst(finglish.count))
+                if verbStems[remainder] != nil || pastTenseStems[remainder] != nil || remainder.count >= 2 {
+                    prefix = farsi
+                    word = remainder
+                    isImperative = true
+                    break
+                }
             }
         }
 
-        // 2. Check if this looks like a verb (has verb prefix or matches verb pattern)
-        let isLikelyVerb = !prefix.isEmpty || matchesVerbPattern(word)
+        // 2. Extract verb prefix (mi-, nemi-)
+        if !isImperative {
+            for (finglish, farsi) in verbPrefixes {
+                if word.hasPrefix(finglish) && word.count > finglish.count + 1 {
+                    prefix = farsi
+                    word = String(word.dropFirst(finglish.count))
+                    break
+                }
+            }
+        }
 
-        // 3. Extract suffix based on word type
+        // 3. Check for past tense (no prefix, ends with past suffix, has past stem)
+        if prefix.isEmpty && !isImperative {
+            isPastTense = checkPastTense(word)
+        }
+
+        // 4. Check if this looks like a verb
+        let isLikelyVerb = !prefix.isEmpty || isImperative || isPastTense || matchesVerbPattern(word)
+
+        // 5. Extract suffix based on word type - try multiple suffixes (suffix chaining)
+        var suffixes: [String] = []
+
         if isLikelyVerb {
             // Try verb suffixes
             for (finglish, farsi) in presentSuffixes {
                 if word.hasSuffix(finglish) && word.count > finglish.count {
-                    suffix = farsi
+                    suffixes.insert(farsi, at: 0)
                     word = String(word.dropLast(finglish.count))
                     break
                 }
             }
+            // Also try past suffixes if it looks like past tense
+            if isPastTense {
+                for (finglish, farsi) in pastSuffixes {
+                    if word.hasSuffix(finglish) && word.count > finglish.count {
+                        if suffixes.isEmpty {
+                            suffixes.insert(farsi, at: 0)
+                            word = String(word.dropLast(finglish.count))
+                        }
+                        break
+                    }
+                }
+            }
         } else {
-            // Try noun suffixes
-            for (finglish, farsi) in nounSuffixes {
-                if word.hasSuffix(finglish) && word.count > finglish.count {
-                    suffix = farsi
-                    word = String(word.dropLast(finglish.count))
-                    break
+            // Try noun suffixes - support chaining (e.g., ketabhayam = کتاب‌هایم)
+            var foundSuffix = true
+            while foundSuffix && word.count > 2 {
+                foundSuffix = false
+                for (finglish, farsi) in nounSuffixes {
+                    if word.hasSuffix(finglish) && word.count > finglish.count {
+                        suffixes.insert(farsi, at: 0)
+                        word = String(word.dropLast(finglish.count))
+                        foundSuffix = true
+                        break
+                    }
                 }
             }
         }
 
-        // 4. Transliterate the stem
+        suffix = suffixes.joined()
+
+        // 6. Transliterate the stem
         var stem: String
 
-        // Check verb stems first
-        if let verbStem = verbStems[word] {
+        // Check past tense stems first
+        if let pastStem = pastTenseStems[word] {
+            stem = pastStem
+        }
+        // Then check present verb stems
+        else if let verbStem = verbStems[word] {
             stem = verbStem
-        } else {
-            // Context-aware transliteration of stem
+        }
+        // Context-aware transliteration of stem
+        else {
             stem = contextAwareTransliterate(word)
         }
 
-        // 5. Combine with ZWNJ where appropriate
+        // 7. Combine with ZWNJ where appropriate
         var result = ""
 
         if !prefix.isEmpty {
@@ -763,7 +926,7 @@ class FinglishConverter {
 
         if !suffix.isEmpty {
             // Add ZWNJ before های/ها
-            if suffix == "ها" || suffix == "های" || suffix.hasPrefix("ها") {
+            if suffix.hasPrefix("ها") || suffix.hasPrefix("های") {
                 result = result + FinglishConverter.ZWNJ + suffix
             } else {
                 result = result + suffix
@@ -771,6 +934,26 @@ class FinglishConverter {
         }
 
         return result
+    }
+
+    /// Check if a word looks like past tense
+    private func checkPastTense(_ word: String) -> Bool {
+        // Check if the word (minus possible suffix) matches a past tense stem
+        for (stem, _) in pastTenseStems {
+            if word.hasPrefix(stem) {
+                return true
+            }
+        }
+
+        // Common past tense endings
+        let pastEndings = ["id", "ad", "od", "ast", "esht", "aft", "ord", "urd"]
+        for ending in pastEndings {
+            if word.contains(ending) {
+                return true
+            }
+        }
+
+        return false
     }
 
     /// Check if a word matches common verb patterns
