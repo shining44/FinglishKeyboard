@@ -742,6 +742,9 @@ class FinglishConverter {
     private func tryCompoundMatch(_ input: String) -> String? {
         let lowered = input.lowercased()
 
+        // Need at least 3 characters for compound matching
+        guard lowered.count >= 3 else { return nil }
+
         // Direct compound lookup
         for (first, second, result) in compoundParts {
             let combined = first + second
@@ -749,21 +752,26 @@ class FinglishConverter {
                 return result
             }
             // Also check with common variations
-            if lowered == first + second.replacingOccurrences(of: "a", with: "aa") ||
-               lowered == first.replacingOccurrences(of: "o", with: "oo") + second {
-                return result
+            if !second.isEmpty {
+                if lowered == first + second.replacingOccurrences(of: "a", with: "aa") ||
+                   lowered == first.replacingOccurrences(of: "o", with: "oo") + second {
+                    return result
+                }
             }
         }
 
-        // Try splitting the word at various points
-        for i in 2..<min(lowered.count - 1, 6) {
-            let index = lowered.index(lowered.startIndex, offsetBy: i)
-            let firstPart = String(lowered[..<index])
-            let secondPart = String(lowered[index...])
+        // Try splitting the word at various points (only if word is long enough)
+        let maxSplit = min(lowered.count - 1, 6)
+        if maxSplit > 2 {
+            for i in 2..<maxSplit {
+                let index = lowered.index(lowered.startIndex, offsetBy: i)
+                let firstPart = String(lowered[..<index])
+                let secondPart = String(lowered[index...])
 
-            for (first, second, result) in compoundParts {
-                if firstPart == first && secondPart == second {
-                    return result
+                for (first, second, result) in compoundParts {
+                    if firstPart == first && secondPart == second {
+                        return result
+                    }
                 }
             }
         }
