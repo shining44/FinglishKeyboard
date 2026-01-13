@@ -164,7 +164,7 @@ struct KeyboardView: View {
                 HStack(spacing: 6) {
                     ForEach(numberRows[2], id: \.self) { key in
                         KeyButton(title: key, action: {
-                            state.textDocumentProxy?.insertText(key)
+                            state.insertPunctuation(key)
                             triggerHaptic()
                         })
                     }
@@ -201,7 +201,7 @@ struct KeyboardView: View {
                 HStack(spacing: 6) {
                     ForEach(symbolRows[2], id: \.self) { key in
                         KeyButton(title: key, action: {
-                            state.textDocumentProxy?.insertText(key)
+                            state.insertPunctuation(key)
                             triggerHaptic()
                         })
                     }

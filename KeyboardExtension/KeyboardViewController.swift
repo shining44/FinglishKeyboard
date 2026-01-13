@@ -290,6 +290,28 @@ class KeyboardState: ObservableObject {
         }
     }
 
+    // Insert punctuation - finalize current word first, then insert punctuation
+    func insertPunctuation(_ punctuation: String) {
+        guard let proxy = textDocumentProxy else { return }
+
+        // Finalize the current word before inserting punctuation
+        if !currentWord.isEmpty {
+            if let firstSuggestion = suggestions.first {
+                let wordLength = currentWord.count
+                for _ in 0..<wordLength {
+                    proxy.deleteBackward()
+                }
+                proxy.insertText(firstSuggestion)
+                previousFarsiWord = firstSuggestion
+            }
+            currentWord = ""
+            suggestions = []
+        }
+
+        // Now insert the punctuation
+        proxy.insertText(punctuation)
+    }
+
     // Insert Zero-Width Non-Joiner (half-space)
     func insertZWNJ() {
         guard let proxy = textDocumentProxy else { return }
