@@ -114,7 +114,7 @@ class KeyboardState: ObservableObject {
     }
 
     func insertFarsi(_ text: String) {
-        guard let proxy = textDocumentProxy else { return }
+        guard textDocumentProxy != nil else { return }
         syncCurrentWordFromDocument()
 
         let originalFinglish = currentWord

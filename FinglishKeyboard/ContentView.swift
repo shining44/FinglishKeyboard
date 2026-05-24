@@ -4,316 +4,299 @@ struct ContentView: View {
     @State private var keyboardEnabled = false
     @State private var demoInput = ""
     @State private var demoSuggestions: [String] = []
-    @Environment(\.colorScheme) var colorScheme
 
     private let converter = DemoConverter()
+    private let keyboardBundleIdentifier = "com.alitayyebi.finglish.keyboard"
+    private let exampleWords = [
+        ExampleWord(finglish: "salam", farsi: "سلام"),
+        ExampleWord(finglish: "mersi", farsi: "مرسی"),
+        ExampleWord(finglish: "khobi", farsi: "خوبی"),
+        ExampleWord(finglish: "chetori", farsi: "چطوری"),
+        ExampleWord(finglish: "mamnoon", farsi: "ممنون"),
+        ExampleWord(finglish: "mikham", farsi: "می‌خوام")
+    ]
+
+    private let exampleColumns = [
+        GridItem(.adaptive(minimum: 92), spacing: 10)
+    ]
 
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 32) {
+                VStack(alignment: .leading, spacing: 24) {
                     headerSection
+                    statusSection
                     liveDemo
-                    featuresSection
                     setupStepsSection
-                    testSection
+                    featuresSection
                     tipsSection
                 }
-                .padding()
+                .padding(.horizontal, 18)
+                .padding(.vertical, 20)
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Finglish Keyboard")
-            .onAppear {
-                checkKeyboardEnabled()
-            }
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear(perform: checkKeyboardEnabled)
         }
         .navigationViewStyle(.stack)
     }
 
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center, spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(
+                            LinearGradient(
+                                colors: [Color(red: 0.07, green: 0.35, blue: 0.95), Color(red: 0.48, green: 0.18, blue: 0.86)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+
+                    Text("ف")
+                        .font(.system(size: 46, weight: .bold))
+                        .foregroundColor(.white)
+                }
+                .frame(width: 88, height: 88)
+                .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Type Persian the way you text it.")
+                        .font(.system(.title2, design: .rounded).weight(.bold))
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Text("Write Finglish, choose the right Persian word, and keep typing without sending your text anywhere.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 8) {
+                TrustBadge(icon: "lock.shield", title: "On-device")
+                TrustBadge(icon: "keyboard", title: "No Full Access")
+                TrustBadge(icon: "textformat.abc", title: "Finglish first")
+            }
+        }
+    }
+
+    private var statusSection: some View {
+        Card {
+            HStack(alignment: .center, spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(keyboardEnabled ? Color.green.opacity(0.16) : Color.orange.opacity(0.16))
+                        .frame(width: 44, height: 44)
+
+                    Image(systemName: keyboardEnabled ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundColor(keyboardEnabled ? .green : .orange)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(keyboardEnabled ? "Keyboard is enabled" : "Keyboard setup needed")
+                        .font(.headline)
+
+                    Text(keyboardEnabled ? "Open any text field and use the globe key to switch to Finglish." : "Add Finglish Keyboard in iOS Settings to use it in Messages, Mail, Notes, and other apps.")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 8)
+
+                Button(action: openSettings) {
+                    Text(keyboardEnabled ? "Settings" : "Set Up")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .buttonStyle(.borderedProminent)
+            }
+        }
+    }
+
     private var liveDemo: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Live Demo")
-                .font(.headline)
-                .padding(.horizontal)
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Try The Feel", subtitle: "The real keyboard has the full dictionary and prediction engine. This preview shows the interaction model.")
 
-            VStack(spacing: 12) {
-                Text("Type Finglish below to see the conversion:")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+            Card {
+                VStack(alignment: .leading, spacing: 14) {
+                    TextField("Try: salam, mikham, chetori", text: $demoInput)
+                        .textFieldStyle(.roundedBorder)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                        .onChange(of: demoInput) { updateDemoSuggestions(for: $0) }
 
-                // Input field
-                TextField("Type here... (e.g., salam)", text: $demoInput)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .autocapitalization(.none)
-                    .disableAutocorrection(true)
-                    .onChange(of: demoInput) { newValue in
-                        updateDemoSuggestions(for: newValue)
+                    if demoSuggestions.isEmpty {
+                        Text("Suggestions appear here as Persian choices, just like the keyboard bar.")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 10) {
+                                ForEach(Array(demoSuggestions.prefix(5).enumerated()), id: \.offset) { index, suggestion in
+                                    DemoSuggestionChip(text: suggestion, isPrimary: index == 0)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
                     }
 
-                // Suggestions
-                if !demoSuggestions.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("Suggestions:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-
-                        HStack(spacing: 12) {
-                            ForEach(demoSuggestions.prefix(3), id: \.self) { suggestion in
-                                Text(suggestion)
-                                    .font(.title2)
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 8)
-                                    .background(Color.blue.opacity(0.1))
-                                    .cornerRadius(8)
+                    LazyVGrid(columns: exampleColumns, spacing: 10) {
+                        ForEach(exampleWords) { word in
+                            ExampleWordView(word: word) {
+                                demoInput = word.finglish
+                                updateDemoSuggestions(for: word.finglish)
                             }
                         }
                     }
                 }
-
-                if demoInput.isEmpty {
-                    Text("Examples: salam, mersi, chetori, khobi")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
             }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
         }
-    }
-
-    private func updateDemoSuggestions(for input: String) {
-        if input.isEmpty {
-            demoSuggestions = []
-        } else {
-            demoSuggestions = converter.getSuggestions(for: input)
-        }
-    }
-
-    private var headerSection: some View {
-        VStack(spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [Color.blue, Color.purple],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 100, height: 100)
-
-                Text("ف")
-                    .font(.system(size: 48, weight: .bold))
-                    .foregroundColor(.white)
-            }
-
-            Text("Type in Finglish, Get Farsi")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .multilineTextAlignment(.center)
-
-            Text("Convert your Latin-script Persian typing to beautiful Farsi characters in real-time")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-        }
-        .padding(.top, 20)
     }
 
     private var setupStepsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Setup Instructions")
-                .font(.headline)
-                .padding(.horizontal)
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Setup", subtitle: "iOS requires every custom keyboard to be added manually.")
 
-            VStack(spacing: 0) {
-                SetupStepRow(
-                    number: 1,
-                    title: "Open Settings",
-                    description: "Tap the button below to open keyboard settings",
-                    isCompleted: false,
-                    action: openSettings
-                )
+            Card {
+                VStack(spacing: 0) {
+                    SetupStepRow(
+                        number: 1,
+                        title: "Open this app in Settings",
+                        description: "Tap Set Up, then choose Keyboards.",
+                        isCompleted: false,
+                        action: openSettings
+                    )
 
-                Divider()
-                    .padding(.leading, 56)
+                    Divider().padding(.leading, 56)
 
-                SetupStepRow(
-                    number: 2,
-                    title: "Add New Keyboard",
-                    description: "Tap 'Keyboards' then 'Add New Keyboard...'",
-                    isCompleted: false
-                )
+                    SetupStepRow(
+                        number: 2,
+                        title: "Add Finglish Keyboard",
+                        description: "In Keyboards, enable Finglish Keyboard.",
+                        isCompleted: keyboardEnabled
+                    )
 
-                Divider()
-                    .padding(.leading, 56)
+                    Divider().padding(.leading, 56)
 
-                SetupStepRow(
-                    number: 3,
-                    title: "Select Finglish Keyboard",
-                    description: "Find and tap 'Finglish Keyboard' in the list",
-                    isCompleted: keyboardEnabled
-                )
-
-                Divider()
-                    .padding(.leading, 56)
-
-                SetupStepRow(
-                    number: 4,
-                    title: "Start Typing",
-                    description: "Use the globe key to switch to Finglish",
-                    isCompleted: false
-                )
+                    SetupStepRow(
+                        number: 3,
+                        title: "Switch with the globe key",
+                        description: "Use it anywhere you type. Full Access is not required.",
+                        isCompleted: keyboardEnabled
+                    )
+                }
             }
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
         }
     }
 
     private var featuresSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Features")
-                .font(.headline)
-                .padding(.horizontal)
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Built For Persian Typing", subtitle: "Fast suggestions, careful typography, and controls that stay out of the way.")
 
-            VStack(spacing: 0) {
-                FeatureRow(
-                    icon: "wand.and.stars",
-                    iconColor: .purple,
-                    title: "Smart Conversion",
-                    description: "2800+ words with intelligent transliteration"
-                )
-
-                Divider().padding(.leading, 56)
-
-                FeatureRow(
-                    icon: "character.cursor.ibeam",
-                    iconColor: .blue,
-                    title: "Fuzzy Matching",
-                    description: "Handles typos and spelling variations"
-                )
-
-                Divider().padding(.leading, 56)
-
-                FeatureRow(
-                    icon: "arrow.uturn.backward",
-                    iconColor: .orange,
-                    title: "Undo Support",
-                    description: "Restore original Finglish if needed"
-                )
-
-                Divider().padding(.leading, 56)
-
-                FeatureRow(
-                    icon: "hand.tap",
-                    iconColor: .green,
-                    title: "Long Press Alternates",
-                    description: "Access alternate Persian characters"
-                )
-
-                Divider().padding(.leading, 56)
-
-                FeatureRow(
-                    icon: "number",
-                    iconColor: .red,
-                    title: "Persian Numbers",
-                    description: "Automatic Persian numeral conversion"
-                )
-
-                Divider().padding(.leading, 56)
-
-                FeatureRow(
-                    icon: "arrow.left.and.right",
-                    iconColor: .teal,
-                    title: "Cursor Control",
-                    description: "Swipe on space bar to move cursor"
-                )
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
+                CapabilityCard(icon: "wand.and.stars", title: "Smart conversion", detail: "Dictionary, phonetics, typo handling, and verb patterns.")
+                CapabilityCard(icon: "arrow.uturn.backward", title: "Undo", detail: "Restore the original Finglish when a choice is wrong.")
+                CapabilityCard(icon: "rectangle.split.1x2", title: "Half-space", detail: "Dedicated ZWNJ key for proper Persian word forms.")
+                CapabilityCard(icon: "arrow.left.and.right", title: "Cursor control", detail: "Swipe on space to move through text precisely.")
             }
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
-        }
-    }
-
-    private var testSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Try It Out")
-                .font(.headline)
-                .padding(.horizontal)
-
-            VStack(spacing: 16) {
-                Text("Once enabled, try typing these words:")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                HStack(spacing: 20) {
-                    ExampleWordView(finglish: "salam", farsi: "سلام")
-                    ExampleWordView(finglish: "mersi", farsi: "مرسی")
-                    ExampleWordView(finglish: "khobi", farsi: "خوبی")
-                }
-
-                HStack(spacing: 20) {
-                    ExampleWordView(finglish: "chetori", farsi: "چطوری")
-                    ExampleWordView(finglish: "mamnoon", farsi: "ممنون")
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
         }
     }
 
     private var tipsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Pro Tips")
-                .font(.headline)
-                .padding(.horizontal)
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(title: "Typing Details", subtitle: "Small shortcuts that make the keyboard feel native.")
 
-            VStack(spacing: 0) {
-                TipRow(
-                    tip: "Double-tap space to insert a period",
-                    icon: "circle.fill"
-                )
-
-                Divider().padding(.leading, 40)
-
-                TipRow(
-                    tip: "Long-press any letter for Persian alternates",
-                    icon: "hand.point.up.left.fill"
-                )
-
-                Divider().padding(.leading, 40)
-
-                TipRow(
-                    tip: "Use the half-space key for proper ZWNJ",
-                    icon: "rectangle.split.1x2"
-                )
-
-                Divider().padding(.leading, 40)
-
-                TipRow(
-                    tip: "Tap suggestions to insert Farsi words",
-                    icon: "text.cursor"
-                )
+            Card {
+                VStack(spacing: 0) {
+                    TipRow(tip: "Tap space to accept the first suggestion and continue.", icon: "space")
+                    Divider().padding(.leading, 40)
+                    TipRow(tip: "Tap a suggestion when you want a different Persian spelling.", icon: "text.cursor")
+                    Divider().padding(.leading, 40)
+                    TipRow(tip: "Long-press letters for Persian alternates.", icon: "hand.point.up.left.fill")
+                    Divider().padding(.leading, 40)
+                    TipRow(tip: "Double-tap space for period and space.", icon: "circle.fill")
+                }
             }
-            .background(Color(.systemBackground))
-            .cornerRadius(12)
         }
+    }
+
+    private func updateDemoSuggestions(for input: String) {
+        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        demoSuggestions = trimmed.isEmpty ? [] : converter.getSuggestions(for: trimmed)
     }
 
     private func openSettings() {
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
     }
 
     private func checkKeyboardEnabled() {
-        if let keyboards = UserDefaults.standard.object(forKey: "AppleKeyboards") as? [String] {
-            keyboardEnabled = keyboards.contains { $0.contains("com.finglish.keyboard") }
+        guard let keyboards = UserDefaults.standard.object(forKey: "AppleKeyboards") as? [String] else {
+            keyboardEnabled = false
+            return
         }
+
+        keyboardEnabled = keyboards.contains { $0.contains(keyboardBundleIdentifier) }
+    }
+}
+
+struct Card<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+    }
+}
+
+struct SectionHeader: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.headline)
+
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 2)
+    }
+}
+
+struct TrustBadge: View {
+    let icon: String
+    let title: String
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .foregroundColor(.blue)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(Color.blue.opacity(0.1))
+        .cornerRadius(8)
     }
 }
 
@@ -321,11 +304,11 @@ struct SetupStepRow: View {
     let number: Int
     let title: String
     let description: String
-    var isCompleted: Bool = false
+    var isCompleted = false
     var action: (() -> Void)? = nil
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        HStack(alignment: .top, spacing: 14) {
             ZStack {
                 Circle()
                     .fill(isCompleted ? Color.green : Color.blue)
@@ -344,81 +327,105 @@ struct SetupStepRow: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.body)
-                    .fontWeight(.medium)
+                    .font(.body.weight(.medium))
 
                 Text(description)
                     .font(.subheadline)
                     .foregroundColor(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 if let action = action {
                     Button(action: action) {
                         Text("Open Settings")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
+                            .font(.subheadline.weight(.semibold))
                     }
                     .padding(.top, 4)
                 }
             }
 
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding()
+        .padding(.vertical, 12)
     }
+}
+
+struct ExampleWord: Identifiable {
+    let id = UUID()
+    let finglish: String
+    let farsi: String
 }
 
 struct ExampleWordView: View {
-    let finglish: String
-    let farsi: String
+    let word: ExampleWord
+    let action: () -> Void
 
     var body: some View {
-        VStack(spacing: 4) {
-            Text(farsi)
-                .font(.title3)
-                .fontWeight(.medium)
+        Button(action: action) {
+            VStack(spacing: 4) {
+                Text(word.farsi)
+                    .font(.title3.weight(.medium))
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
 
-            Text(finglish)
-                .font(.caption)
-                .foregroundColor(.secondary)
+                Text(word.finglish)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, minHeight: 62)
+            .background(Color(.secondarySystemBackground))
+            .cornerRadius(8)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Color(.systemGray6))
-        .cornerRadius(8)
+        .buttonStyle(.plain)
     }
 }
 
-struct FeatureRow: View {
-    let icon: String
-    let iconColor: Color
-    let title: String
-    let description: String
+struct DemoSuggestionChip: View {
+    let text: String
+    let isPrimary: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
-            ZStack {
-                Circle()
-                    .fill(iconColor.opacity(0.15))
-                    .frame(width: 40, height: 40)
+        Text(text)
+            .font(.title3.weight(isPrimary ? .semibold : .regular))
+            .foregroundColor(isPrimary ? .white : .primary)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(isPrimary ? Color.blue : Color(.secondarySystemBackground))
+            .cornerRadius(8)
+    }
+}
 
-                Image(systemName: icon)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(iconColor)
-            }
+struct CapabilityCard: View {
+    let icon: String
+    let title: String
+    let detail: String
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.body)
-                    .fontWeight(.medium)
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.blue)
+                .frame(width: 34, height: 34)
+                .background(Color.blue.opacity(0.1))
+                .clipShape(Circle())
 
-                Text(description)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-            }
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .fixedSize(horizontal: false, vertical: true)
 
-            Spacer()
+            Text(detail)
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding()
+        .padding(14)
+        .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
     }
 }
 
@@ -429,82 +436,82 @@ struct TipRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.blue)
                 .frame(width: 24)
 
             Text(tip)
                 .font(.subheadline)
                 .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
 
-            Spacer()
+            Spacer(minLength: 0)
         }
-        .padding()
+        .padding(.vertical, 11)
     }
 }
 
-// Simple demo converter for the main app
 class DemoConverter {
-    private let commonWords: [String: String] = [
-        "salam": "سلام",
-        "salaam": "سلام",
-        "mersi": "مرسی",
-        "merci": "مرسی",
-        "mamnoon": "ممنون",
-        "mamnun": "ممنون",
-        "khobi": "خوبی",
-        "khoobi": "خوبی",
-        "chetori": "چطوری",
-        "chetory": "چطوری",
-        "che khabar": "چه خبر",
-        "chekhabar": "چه خبر",
-        "khodahafez": "خداحافظ",
-        "khodafez": "خداحافظ",
-        "bebakhshid": "ببخشید",
-        "lotfan": "لطفاً",
-        "khone": "خونه",
-        "khaane": "خانه",
-        "kar": "کار",
-        "ketab": "کتاب",
-        "doost": "دوست",
-        "dost": "دوست",
-        "mikham": "می‌خوام",
-        "miram": "می‌رم",
-        "miam": "می‌آم",
-        "emrooz": "امروز",
-        "farda": "فردا",
-        "dirooz": "دیروز",
-        "alan": "الان",
-        "hala": "حالا",
-        "khaste": "خسته",
-        "goshne": "گشنه",
-        "tashne": "تشنه",
-        "khoshhal": "خوشحال",
-        "narahat": "ناراحت",
-        "azizam": "عزیزم",
-        "joonam": "جونم",
-        "eshgh": "عشق",
-        "doset daram": "دوست دارم",
-        "kheyli": "خیلی",
-        "ziad": "زیاد",
-        "kam": "کم",
-        "bozorg": "بزرگ",
-        "kuchik": "کوچیک",
-        "khub": "خوب",
-        "bad": "بد",
-        "inja": "اینجا",
-        "oonja": "اونجا",
-        "koja": "کجا",
-        "key": "کی",
-        "chera": "چرا",
-        "chi": "چی",
-        "bashe": "باشه",
-        "ok": "اوکی",
-        "yani": "یعنی",
-        "vali": "ولی",
-        "ama": "اما",
-        "bahal": "باحال",
-        "khafan": "خفن",
+    private let commonWords: [(String, String)] = [
+        ("salam", "سلام"),
+        ("salaam", "سلام"),
+        ("mersi", "مرسی"),
+        ("merci", "مرسی"),
+        ("mamnoon", "ممنون"),
+        ("mamnun", "ممنون"),
+        ("khobi", "خوبی"),
+        ("khoobi", "خوبی"),
+        ("chetori", "چطوری"),
+        ("chetory", "چطوری"),
+        ("che khabar", "چه خبر"),
+        ("chekhabar", "چه خبر"),
+        ("khodahafez", "خداحافظ"),
+        ("khodafez", "خداحافظ"),
+        ("bebakhshid", "ببخشید"),
+        ("lotfan", "لطفاً"),
+        ("khone", "خونه"),
+        ("khaane", "خانه"),
+        ("kar", "کار"),
+        ("ketab", "کتاب"),
+        ("doost", "دوست"),
+        ("dost", "دوست"),
+        ("mikham", "می‌خوام"),
+        ("miram", "می‌رم"),
+        ("miam", "می‌آم"),
+        ("emrooz", "امروز"),
+        ("farda", "فردا"),
+        ("dirooz", "دیروز"),
+        ("alan", "الان"),
+        ("hala", "حالا"),
+        ("khaste", "خسته"),
+        ("goshne", "گشنه"),
+        ("tashne", "تشنه"),
+        ("khoshhal", "خوشحال"),
+        ("narahat", "ناراحت"),
+        ("azizam", "عزیزم"),
+        ("joonam", "جونم"),
+        ("eshgh", "عشق"),
+        ("doset daram", "دوست دارم"),
+        ("kheyli", "خیلی"),
+        ("ziad", "زیاد"),
+        ("kam", "کم"),
+        ("bozorg", "بزرگ"),
+        ("kuchik", "کوچیک"),
+        ("khub", "خوب"),
+        ("bad", "بد"),
+        ("inja", "اینجا"),
+        ("oonja", "اونجا"),
+        ("koja", "کجا"),
+        ("key", "کی"),
+        ("chera", "چرا"),
+        ("chi", "چی"),
+        ("bashe", "باشه"),
+        ("ok", "اوکی"),
+        ("yani", "یعنی"),
+        ("vali", "ولی"),
+        ("ama", "اما"),
+        ("bahal", "باحال"),
+        ("khafan", "خفن")
     ]
 
     private let charMappings: [Character: String] = [
@@ -519,25 +526,22 @@ class DemoConverter {
         let lowercased = input.lowercased()
         var results: [String] = []
 
-        // Check dictionary first
-        if let match = commonWords[lowercased] {
-            results.append(match)
+        for (key, value) in commonWords where key == lowercased {
+            append(value, to: &results)
         }
 
-        // Check partial matches
-        for (key, value) in commonWords {
-            if key.hasPrefix(lowercased) && key != lowercased {
-                results.append(value)
-            }
+        for (key, value) in commonWords where key.hasPrefix(lowercased) && key != lowercased {
+            append(value, to: &results)
         }
 
-        // Simple transliteration
-        let transliterated = transliterate(lowercased)
-        if !results.contains(transliterated) {
-            results.append(transliterated)
-        }
-
+        append(transliterate(lowercased), to: &results)
         return Array(results.prefix(5))
+    }
+
+    private func append(_ value: String, to results: inout [String]) {
+        if !results.contains(value) {
+            results.append(value)
+        }
     }
 
     private func transliterate(_ input: String) -> String {
@@ -547,7 +551,6 @@ class DemoConverter {
         while i < input.endIndex {
             let remaining = String(input[i...])
 
-            // Check multi-char patterns
             if remaining.hasPrefix("kh") {
                 result += "خ"
                 i = input.index(i, offsetBy: 2)
@@ -573,7 +576,6 @@ class DemoConverter {
                 result += "ی"
                 i = input.index(i, offsetBy: 2)
             } else {
-                // Single char
                 let char = input[i]
                 result += charMappings[char] ?? String(char)
                 i = input.index(after: i)

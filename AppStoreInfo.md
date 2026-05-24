@@ -14,21 +14,21 @@
 
 ## Description
 
-Finglish Keyboard makes typing in Persian effortless. Simply type in Finglish (Persian written with Latin letters) and watch it convert to beautiful Farsi script in real-time.
+Finglish Keyboard makes typing in Persian feel natural. Type the way many Persian speakers already text in Latin letters, then choose polished Persian script from fast on-device suggestions.
 
 **Key Features:**
 
-- Smart Conversion: 3000+ word dictionary with intelligent transliteration
+- Smart Conversion: thousands of common words with intelligent transliteration
 - Fuzzy Matching: Handles typos and spelling variations automatically
-- Word Prediction: Suggests the next word based on context
+- Word Prediction: suggests the next word based on context
 - Undo Support: Made a mistake? Tap to restore your original text
-- Persian Numbers: Automatic conversion to Persian numerals
+- Persian Numbers: automatic conversion to Persian numerals
 - Long-Press Alternates: Access alternate Persian characters easily
 - Cursor Control: Swipe on spacebar to move cursor
 - ZWNJ Support: Proper half-space for Persian typography
 - Dark Mode: Full support for light and dark themes
 
-Perfect for messaging, social media, emails, and anywhere you need to type in Persian but prefer using a Latin keyboard.
+Perfect for messaging, social media, email, notes, and anywhere you need Persian text but prefer starting from a Latin keyboard.
 
 No data is collected. Your typing stays on your device.
 
@@ -46,7 +46,7 @@ You need to host a privacy policy. Here's the text:
 
 ### Privacy Policy for Finglish Keyboard
 
-**Last updated: January 2024**
+**Last updated: May 2026**
 
 Finglish Keyboard is designed with your privacy in mind.
 
@@ -58,7 +58,7 @@ Finglish Keyboard is designed with your privacy in mind.
 
 **Third Parties:** We do not share any data with third parties because we do not collect any data.
 
-**Contact:** For questions about this privacy policy, contact [your email].
+**Contact:** For questions about this privacy policy, use the developer support contact listed for Finglish Keyboard in the App Store.
 
 ---
 
@@ -66,7 +66,7 @@ Finglish Keyboard is designed with your privacy in mind.
 
 Initial release featuring:
 - Finglish to Farsi real-time conversion
-- 3000+ word dictionary
+- Thousands of common words
 - Smart suggestions with fuzzy matching
 - Word prediction
 - Persian numbers and punctuation
