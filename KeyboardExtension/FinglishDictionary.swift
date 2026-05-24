@@ -18,10 +18,17 @@ class FinglishDictionary {
     // Get next word predictions based on the previous word
     func getNextWordPredictions(after previousWord: String) -> [String] {
         guard let predictions = nextWordMap[previousWord] else { return [] }
-        return predictions.sorted { $0.1 > $1.1 }.prefix(3).map { $0.0 }
+        return predictions.sorted {
+            if $0.1 == $1.1 {
+                return $0.0 < $1.0
+            }
+            return $0.1 > $1.1
+        }
+        .prefix(6)
+        .map { $0.0 }
     }
 
-    func findMatches(for input: String) -> [String] {
+    func findMatches(for input: String, includeFuzzy: Bool = true) -> [String] {
         let lowercased = input.lowercased()
         var matches: [(String, Int)] = []
 
@@ -48,7 +55,7 @@ class FinglishDictionary {
         }
 
         // Fuzzy matching - find words within edit distance 1-2
-        if matches.count < 3 && lowercased.count >= 3 {
+        if includeFuzzy && matches.count < 6 && lowercased.count >= 3 {
             let fuzzyMatches = findFuzzyMatches(for: lowercased, maxDistance: 2)
             for (word, distance) in fuzzyMatches {
                 let freq = frequencyMap[word] ?? 0
@@ -58,7 +65,12 @@ class FinglishDictionary {
         }
 
         // Sort by frequency/priority and remove duplicates
-        let sorted = matches.sorted { $0.1 > $1.1 }
+        let sorted = matches.sorted {
+            if $0.1 == $1.1 {
+                return $0.0 < $1.0
+            }
+            return $0.1 > $1.1
+        }
         var seen = Set<String>()
         var result: [String] = []
         for (word, _) in sorted {
@@ -66,7 +78,7 @@ class FinglishDictionary {
                 seen.insert(word)
                 result.append(word)
             }
-            if result.count >= 5 { break }
+            if result.count >= 8 { break }
         }
 
         return result
@@ -1315,6 +1327,14 @@ class FinglishDictionary {
             ("khube", ["خوبه"], 95),
             ("bad", ["بد"], 95),
             ("bade", ["بده"], 92),
+            ("badi", ["بدی"], 100),
+            ("badi", ["بعدی"], 94),
+            ("badi", ["بادی"], 90),
+            ("badii", ["بدی"], 94),
+            ("baadi", ["بعدی"], 98),
+            ("baadi", ["بادی"], 92),
+            ("badie", ["بدیه", "بعدیه"], 92),
+            ("badiye", ["بدیه", "بعدیه"], 92),
             ("bozorg", ["بزرگ"], 93),
             ("bozorge", ["بزرگه"], 90),
             ("kuchik", ["کوچیک"], 93),
@@ -2381,6 +2401,11 @@ class FinglishDictionary {
             // Common adjectives
             ("khoob", ["خوب"], 100),
             ("bad", ["بد"], 98),
+            ("badi", ["بدی"], 100),
+            ("badi", ["بعدی"], 94),
+            ("badi", ["بادی"], 90),
+            ("baadi", ["بعدی"], 98),
+            ("baadi", ["بادی"], 92),
             ("bozorg", ["بزرگ"], 95),
             ("kuchik", ["کوچیک"], 95),
             ("kuchak", ["کوچک"], 92),
@@ -4066,6 +4091,14 @@ class FinglishDictionary {
             ("khubtarin", ["خوبترین"], 92),
             ("bad", ["بد"], 98),
             ("bade", ["بده"], 96),
+            ("badi", ["بدی"], 100),
+            ("badi", ["بعدی"], 94),
+            ("badi", ["بادی"], 90),
+            ("badii", ["بدی"], 94),
+            ("baadi", ["بعدی"], 98),
+            ("baadi", ["بادی"], 92),
+            ("badie", ["بدیه", "بعدیه"], 92),
+            ("badiye", ["بدیه", "بعدیه"], 92),
             ("badtar", ["بدتر"], 95),
             ("badtarin", ["بدترین"], 92),
             ("ali", ["عالی"], 98),

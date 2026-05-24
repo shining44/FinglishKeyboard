@@ -12,40 +12,24 @@ struct KeyButton: View {
     @State private var showPopup = false
     @State private var showAlternates = false
     @State private var selectedAlternate: Int? = nil
-    @GestureState private var longPressState = false
+    @State private var longPressWorkItem: DispatchWorkItem?
+    @State private var didTriggerLongPress = false
 
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Main key
-                Button(action: {
-                    if !showAlternates {
-                        action()
-                    }
-                }) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 5)
-                            .fill(keyColor)
-                            .shadow(color: Color.black.opacity(0.25), radius: 0, x: 0, y: 1)
+                ZStack {
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(keyColor)
+                        .shadow(color: Color.black.opacity(0.25), radius: 0, x: 0, y: 1)
 
-                        Text(title)
-                            .font(.system(size: 22, weight: .light))
-                            .foregroundColor(textColor)
-                    }
+                    Text(title)
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundColor(textColor)
                 }
-                .buttonStyle(KeyPressStyle(isPressed: $isPressed, showPopup: $showPopup))
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.5)
-                        .updating($longPressState) { currentState, gestureState, _ in
-                            gestureState = currentState
-                        }
-                        .onEnded { _ in
-                            if !alternates.isEmpty {
-                                showAlternates = true
-                                triggerHaptic(.medium)
-                            }
-                        }
-                )
+                .scaleEffect(isPressed ? 0.92 : 1.0)
+                .brightness(isPressed ? 0.1 : 0)
+                .animation(.spring(response: 0.15, dampingFraction: 0.6), value: isPressed)
 
                 // Key popup preview
                 if showPopup && !showAlternates {
@@ -81,17 +65,20 @@ struct KeyButton: View {
                     .zIndex(200)
                 }
             }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        handlePressChanged(value, geometry: geometry)
+                    }
+                    .onEnded { value in
+                        handlePressEnded(value, geometry: geometry)
+                    }
+            )
         }
         .frame(height: 42)
-        .onChange(of: isPressed) { newValue in
-            if newValue {
-                showPopup = true
-                triggerHaptic(.light)
-            } else if !showAlternates {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    showPopup = false
-                }
-            }
+        .onDisappear {
+            resetPressState()
         }
     }
 
@@ -106,24 +93,99 @@ struct KeyButton: View {
         colorScheme == .dark ? .white : .black
     }
 
+    private func handlePressChanged(_ value: DragGesture.Value, geometry: GeometryProxy) {
+        if !isPressed {
+            beginPress()
+        }
+
+        if showAlternates {
+            selectedAlternate = alternateIndex(at: value.location, geometry: geometry)
+        }
+    }
+
+    private func handlePressEnded(_ value: DragGesture.Value, geometry: GeometryProxy) {
+        longPressWorkItem?.cancel()
+
+        if showAlternates {
+            let selectedIndex = alternateIndex(at: value.location, geometry: geometry) ?? selectedAlternate
+            if let selectedIndex, let alt = alternates[safe: selectedIndex] {
+                onAlternateSelected?(alt)
+            } else if isInsideKey(value.location, geometry: geometry) {
+                action()
+            }
+        } else if !didTriggerLongPress {
+            action()
+        }
+
+        resetPressState()
+    }
+
+    private func beginPress() {
+        isPressed = true
+        showPopup = true
+        didTriggerLongPress = false
+        selectedAlternate = nil
+        triggerHaptic(.light)
+
+        let workItem = DispatchWorkItem {
+            guard isPressed, !alternates.isEmpty else { return }
+            didTriggerLongPress = true
+            showPopup = false
+            showAlternates = true
+            selectedAlternate = nil
+            triggerHaptic(.medium)
+        }
+        longPressWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45, execute: workItem)
+    }
+
+    private func resetPressState() {
+        longPressWorkItem?.cancel()
+        longPressWorkItem = nil
+        isPressed = false
+        showAlternates = false
+        selectedAlternate = nil
+        didTriggerLongPress = false
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            if !isPressed && !showAlternates {
+                showPopup = false
+            }
+        }
+    }
+
+    private func alternateIndex(at location: CGPoint, geometry: GeometryProxy) -> Int? {
+        guard !alternates.isEmpty, location.y < geometry.size.height * 0.35 else { return nil }
+
+        let itemWidth: CGFloat = 44
+        let spacing: CGFloat = 2
+        let horizontalPadding: CGFloat = 4
+        let totalWidth = CGFloat(alternates.count) * itemWidth +
+            CGFloat(max(alternates.count - 1, 0)) * spacing +
+            horizontalPadding * 2
+        let contentLeft = geometry.size.width / 2 - totalWidth / 2 + horizontalPadding
+        let relativeX = location.x - contentLeft
+        let stride = itemWidth + spacing
+        let index = Int(floor(relativeX / stride))
+        let cellX = relativeX - CGFloat(index) * stride
+
+        guard index >= 0, index < alternates.count, cellX >= 0, cellX <= itemWidth else {
+            return nil
+        }
+
+        return index
+    }
+
+    private func isInsideKey(_ location: CGPoint, geometry: GeometryProxy) -> Bool {
+        location.x >= 0 &&
+            location.x <= geometry.size.width &&
+            location.y >= 0 &&
+            location.y <= geometry.size.height
+    }
+
     private func triggerHaptic(_ style: UIImpactFeedbackGenerator.FeedbackStyle) {
         let generator = UIImpactFeedbackGenerator(style: style)
         generator.impactOccurred()
-    }
-}
-
-struct KeyPressStyle: ButtonStyle {
-    @Binding var isPressed: Bool
-    @Binding var showPopup: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.92 : 1.0)
-            .brightness(configuration.isPressed ? 0.1 : 0)
-            .animation(.spring(response: 0.15, dampingFraction: 0.6), value: configuration.isPressed)
-            .onChange(of: configuration.isPressed) { newValue in
-                isPressed = newValue
-            }
     }
 }
 

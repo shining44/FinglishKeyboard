@@ -269,6 +269,33 @@ class FinglishConverter {
         "khar": "خر",
     ]
 
+    // Common non-verb stems that should remain lexical when suffixes are added.
+    // This keeps words like badi -> بدی from falling back to phonetic بادی.
+    private let lexicalStems: [String: String] = [
+        "bad": "بد",
+        "khub": "خوب",
+        "khoob": "خوب",
+        "jadid": "جدید",
+        "ghadim": "قدیم",
+        "ziba": "زیبا",
+        "ghashang": "قشنگ",
+        "khoshgel": "خوشگل",
+        "khoshkel": "خوشکل",
+        "zesht": "زشت",
+        "bozorg": "بزرگ",
+        "kuchik": "کوچیک",
+        "kuchak": "کوچک",
+        "sard": "سرد",
+        "garm": "گرم",
+        "asoon": "آسون",
+        "asan": "آسان",
+        "sakht": "سخت",
+        "rahat": "راحت",
+        "kharab": "خراب",
+        "dorost": "درست",
+        "ghalat": "غلط"
+    ]
+
     // ============================================
     // COMPOUND WORDS & COMMON PATTERNS
     // ============================================
@@ -418,19 +445,19 @@ class FinglishConverter {
     ]
 
     // Alternative mappings for variant generation
-    private let alternativeMappings: [Character: [String]] = [
-        "a": ["ا", "آ", "ع", "ه"],
-        "e": ["ه", "ی", "ع", "ا"],
-        "o": ["و", "ا", "ُ"],
-        "i": ["ی", "ای", "ئی"],
-        "u": ["و", "او"],
-        "s": ["س", "ص", "ث"],
-        "z": ["ز", "ض", "ظ", "ذ"],
-        "t": ["ت", "ط"],
-        "h": ["ه", "ح", "خ"],
-        "g": ["گ", "غ", "ق"],
-        "c": ["ک", "س", "چ"],
-        "q": ["ق", "غ"],
+    private let alternativeMappings: [(char: Character, replacements: [String])] = [
+        ("a", ["ا", "آ", "ع", "ه"]),
+        ("e", ["ه", "ی", "ع", "ا"]),
+        ("o", ["و", "ا", "ُ"]),
+        ("i", ["ی", "ای", "ئی"]),
+        ("u", ["و", "او"]),
+        ("s", ["س", "ص", "ث"]),
+        ("z", ["ز", "ض", "ظ", "ذ"]),
+        ("t", ["ت", "ط"]),
+        ("h", ["ه", "ح", "خ"]),
+        ("g", ["گ", "غ", "ق"]),
+        ("c", ["ک", "س", "چ"]),
+        ("q", ["ق", "غ"]),
     ]
 
     // Colloquial/informal verb transformations (formal -> colloquial)
@@ -725,15 +752,16 @@ class FinglishConverter {
             addSuggestion(colloquialMatch)
         }
 
-        // 3. Dictionary lookup (highest priority)
-        let dictMatches = dictionary.findMatches(for: corrected)
+        // 3. Dictionary exact/prefix lookup. Fuzzy matches are intentionally
+        // delayed until after morphology so near-misses don't bury plausible words.
+        let dictMatches = dictionary.findMatches(for: corrected, includeFuzzy: false)
         for match in dictMatches {
             addSuggestion(match)
         }
 
         // If typo was corrected, also try original
         if corrected != lowercased {
-            let originalMatches = dictionary.findMatches(for: lowercased)
+            let originalMatches = dictionary.findMatches(for: lowercased, includeFuzzy: false)
             for match in originalMatches {
                 addSuggestion(match)
             }
@@ -769,7 +797,21 @@ class FinglishConverter {
             addSuggestion(endingResult)
         }
 
-        return Array(suggestions.prefix(5))
+        // 10. Fuzzy dictionary matches last. They are useful, but should not
+        // outrank morphology for an exactly typed unknown word.
+        let fuzzyMatches = dictionary.findMatches(for: corrected, includeFuzzy: true)
+        for match in fuzzyMatches {
+            addSuggestion(match)
+        }
+
+        if corrected != lowercased {
+            let originalFuzzyMatches = dictionary.findMatches(for: lowercased, includeFuzzy: true)
+            for match in originalFuzzyMatches {
+                addSuggestion(match)
+            }
+        }
+
+        return Array(suggestions.prefix(8))
     }
 
     // ============================================
@@ -943,8 +985,12 @@ class FinglishConverter {
         // 6. Transliterate the stem
         var stem: String
 
-        // Check past tense stems first
-        if let pastStem = pastTenseStems[word] {
+        // Check lexical stems first so adjective/noun suffixes keep their meaning.
+        if let lexicalStem = lexicalStems[word] {
+            stem = lexicalStem
+        }
+        // Check past tense stems
+        else if let pastStem = pastTenseStems[word] {
             stem = pastStem
         }
         // Then check present verb stems
@@ -1153,7 +1199,10 @@ class FinglishConverter {
         // 1. Generate variants by substituting ambiguous letters
         for (char, alternatives) in alternativeMappings {
             if input.contains(char) {
-                for alt in alternatives.prefix(2) {
+                for alt in alternatives.prefix(3) {
+                    guard isPlausibleSubstitution(char: char, replacement: alt, in: input) else {
+                        continue
+                    }
                     let variant = generateVariantWithSubstitution(input, char: char, replacement: alt)
                     if variant != base && !variants.contains(variant) {
                         variants.append(variant)
@@ -1190,6 +1239,27 @@ class FinglishConverter {
         }
 
         return variants.map { cleanupResult($0) }
+    }
+
+    private func isPlausibleSubstitution(char: Character, replacement: String, in input: String) -> Bool {
+        guard let firstIndex = input.firstIndex(of: char) else { return false }
+        let isFirstCharacter = firstIndex == input.startIndex
+        let isLastCharacter = input.index(after: firstIndex) == input.endIndex
+
+        if char == "a" {
+            if replacement == "آ" && !isFirstCharacter { return false }
+            if replacement == "ه" && !isLastCharacter { return false }
+        }
+
+        if char == "e", replacement == "ا", !isFirstCharacter {
+            return false
+        }
+
+        if char == "i", (replacement == "ای" || replacement == "ئی"), !isFirstCharacter {
+            return false
+        }
+
+        return true
     }
 
     private func generateVariantWithSubstitution(_ input: String, char: Character, replacement: String) -> String {

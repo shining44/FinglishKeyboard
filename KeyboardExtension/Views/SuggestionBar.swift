@@ -47,6 +47,7 @@ struct SuggestionBar: View {
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.secondary)
                             .lineLimit(1)
+                            .frame(maxWidth: 74)
 
                         // Clear button
                         Button(action: {
@@ -64,26 +65,32 @@ struct SuggestionBar: View {
                         .frame(height: 24)
                 }
 
-                ForEach(Array(state.suggestions.prefix(suggestionCount).enumerated()), id: \.offset) { index, suggestion in
-                    if index > 0 {
-                        Divider()
-                            .frame(height: 24)
-                    }
-
-                    SuggestionButton(
-                        suggestion: suggestion,
-                        isFirst: index == 0,
-                        isPrediction: state.currentWord.isEmpty,
-                        action: {
-                            if state.currentWord.isEmpty {
-                                state.insertPrediction(suggestion)
-                            } else {
-                                state.insertFarsi(suggestion)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 0) {
+                        ForEach(Array(state.suggestions.prefix(suggestionCount).enumerated()), id: \.offset) { index, suggestion in
+                            if index > 0 {
+                                Divider()
+                                    .frame(height: 24)
                             }
-                            triggerHaptic()
+
+                            SuggestionButton(
+                                suggestion: suggestion,
+                                isFirst: index == 0,
+                                isPrediction: state.currentWord.isEmpty,
+                                action: {
+                                    if state.currentWord.isEmpty {
+                                        state.insertPrediction(suggestion)
+                                    } else {
+                                        state.insertFarsi(suggestion)
+                                    }
+                                    triggerHaptic()
+                                }
+                            )
                         }
-                    )
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .clipped()
             }
         }
         .frame(maxWidth: .infinity)
@@ -96,13 +103,7 @@ struct SuggestionBar: View {
 
     // Calculate how many suggestions to show based on available space
     private var suggestionCount: Int {
-        if state.canUndo && !state.currentWord.isEmpty {
-            return 2  // Undo + current word + 2 suggestions
-        } else if state.canUndo || !state.currentWord.isEmpty {
-            return 2  // Either undo or current word + 2 suggestions
-        } else {
-            return 3  // Full 3 suggestions
-        }
+        state.currentWord.isEmpty ? 6 : 8
     }
 
     private func triggerHaptic() {
@@ -130,8 +131,11 @@ struct SuggestionButton: View {
                 Text(suggestion)
                     .font(.system(size: 18, weight: isFirst ? .semibold : .regular))
                     .foregroundColor(textColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 12)
+            .frame(minWidth: 64)
             .frame(height: 44)
             .contentShape(Rectangle())
         }
