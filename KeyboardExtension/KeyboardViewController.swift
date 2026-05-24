@@ -475,6 +475,7 @@ final class UserLexicon {
     private let nextWordChoicesKey = "FinglishKeyboard.UserLexicon.nextWordChoices.v1"
     private let maxInputs = 500
     private let maxCandidatesPerInput = 12
+    private let maxCandidateWeight = 40
 
     private var suggestionChoices: [String: [String: Int]]
     private var nextWordChoices: [String: [String: Int]]
@@ -521,41 +522,50 @@ final class UserLexicon {
     }
 
     private func rankedResults(learned: [String: Int], base: [String], limit: Int) -> [String] {
-        let baseRank = Dictionary(uniqueKeysWithValues: base.enumerated().map { ($0.element, $0.offset) })
-        var seen = Set<String>()
-        var results: [String] = []
+        guard limit > 0 else { return [] }
 
-        let learnedResults = learned
-            .filter { $0.value > 0 }
+        var baseRank: [String: Int] = [:]
+        for (index, candidate) in base.enumerated() where baseRank[candidate] == nil {
+            baseRank[candidate] = index
+        }
+
+        var candidateSet = Set(base)
+        for (candidate, weight) in learned where weight > 0 {
+            candidateSet.insert(candidate)
+        }
+
+        let ranked = candidateSet
+            .filter { !$0.isEmpty }
+            .map { candidate -> (candidate: String, score: Int, baseRank: Int) in
+                let rank = baseRank[candidate]
+                let dictionaryScore = rank.map { max(0, 1_000 - $0 * 90) } ?? 350
+                let learnedWeight = min(max(learned[candidate] ?? 0, 0), maxCandidateWeight)
+                let learnedScore = learnedWeight * 200
+
+                return (
+                    candidate: candidate,
+                    score: dictionaryScore + learnedScore,
+                    baseRank: rank ?? Int.max
+                )
+            }
             .sorted {
-                if $0.value != $1.value {
-                    return $0.value > $1.value
+                if $0.score != $1.score {
+                    return $0.score > $1.score
                 }
-                return (baseRank[$0.key] ?? Int.max) < (baseRank[$1.key] ?? Int.max)
+                if $0.baseRank != $1.baseRank {
+                    return $0.baseRank < $1.baseRank
+                }
+                return $0.candidate < $1.candidate
             }
 
-        for (candidate, _) in learnedResults {
-            append(candidate, to: &results, seen: &seen, limit: limit)
-        }
-
-        for candidate in base {
-            append(candidate, to: &results, seen: &seen, limit: limit)
-        }
-
-        return results
-    }
-
-    private func append(_ candidate: String, to results: inout [String], seen: inout Set<String>, limit: Int) {
-        guard results.count < limit, !candidate.isEmpty, !seen.contains(candidate) else { return }
-        seen.insert(candidate)
-        results.append(candidate)
+        return ranked.prefix(limit).map { $0.candidate }
     }
 
     private func adjust(_ map: inout [String: [String: Int]], key: String, value: String, delta: Int) {
         guard !key.isEmpty, !value.isEmpty, delta != 0 else { return }
 
         var values = map[key] ?? [:]
-        let updated = (values[value] ?? 0) + delta
+        let updated = min((values[value] ?? 0) + delta, maxCandidateWeight)
         if updated > 0 {
             values[value] = updated
         } else {

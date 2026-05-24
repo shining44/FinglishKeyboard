@@ -126,6 +126,19 @@ class FinglishConverter {
         ("i", "ی"),
     ]
 
+    // Conversational object clitics after finite verbs: mibinamet -> می‌بینمت.
+    private let objectCliticSuffixes: [(finglish: String, farsi: String)] = [
+        ("eshoon", "شون"),
+        ("eshun", "شون"),
+        ("etoon", "تون"),
+        ("etun", "تون"),
+        ("emoon", "مون"),
+        ("emun", "مون"),
+        ("esh", "ش"),
+        ("et", "ت"),
+        ("em", "م"),
+    ]
+
     // Comprehensive verb stems dictionary (finglish -> farsi stem)
     private let verbStems: [String: String] = [
         // === MOTION & MOVEMENT ===
@@ -733,15 +746,14 @@ class FinglishConverter {
         let lowercased = input.lowercased().trimmingCharacters(in: .whitespaces)
         guard !lowercased.isEmpty else { return [] }
 
-        var suggestions: [String] = []
-        var seenSuggestions = Set<String>()
+        var candidates: [(text: String, score: Int, order: Int)] = []
+        var order = 0
 
-        func addSuggestion(_ s: String) {
+        func addCandidate(_ s: String, score: Int) {
             let cleaned = cleanupResult(s)
-            if !cleaned.isEmpty && !seenSuggestions.contains(cleaned) {
-                seenSuggestions.insert(cleaned)
-                suggestions.append(cleaned)
-            }
+            guard !cleaned.isEmpty else { return }
+            candidates.append((cleaned, score, order))
+            order += 1
         }
 
         // 1. Apply typo correction if available
@@ -749,69 +761,100 @@ class FinglishConverter {
 
         // 2. Check for direct colloquial match first (highest priority for common verbs)
         if let colloquialMatch = tryColloquialMatch(corrected) {
-            addSuggestion(colloquialMatch)
+            addCandidate(colloquialMatch, score: 12_000)
         }
 
-        // 3. Dictionary exact/prefix lookup. Fuzzy matches are intentionally
+        // 3. Handle object clitics before dictionary fallbacks.
+        if let objectCliticMatch = tryObjectCliticMatch(corrected) {
+            addCandidate(objectCliticMatch, score: 11_800)
+        }
+
+        // 4. Dictionary exact/prefix lookup. Fuzzy matches are intentionally
         // delayed until after morphology so near-misses don't bury plausible words.
-        let dictMatches = dictionary.findMatches(for: corrected, includeFuzzy: false)
-        for match in dictMatches {
-            addSuggestion(match)
+        let dictCandidates = dictionary.findCandidates(for: corrected, includeFuzzy: false, limit: 10)
+        for candidate in dictCandidates {
+            addCandidate(candidate.value, score: candidate.score)
         }
 
         // If typo was corrected, also try original
         if corrected != lowercased {
-            let originalMatches = dictionary.findMatches(for: lowercased, includeFuzzy: false)
-            for match in originalMatches {
-                addSuggestion(match)
+            let originalCandidates = dictionary.findCandidates(for: lowercased, includeFuzzy: false, limit: 10)
+            for candidate in originalCandidates {
+                addCandidate(candidate.value, score: candidate.score - 150)
             }
         }
 
-        // 4. Check for compound word matches
+        // 5. Check for compound word matches
         if let compoundResult = tryCompoundMatch(corrected) {
-            addSuggestion(compoundResult)
+            addCandidate(compoundResult, score: 9_300)
         }
 
-        // 5. Smart morphological transliteration
+        // 6. Smart morphological transliteration
         let morphResult = morphologicalTransliterate(corrected)
-        addSuggestion(morphResult)
+        addCandidate(morphResult, score: 7_200)
 
-        // 6. Context-aware transliteration
+        // 7. Context-aware transliteration
         let contextResult = contextAwareTransliterate(corrected)
         if contextResult != morphResult {
-            addSuggestion(contextResult)
+            addCandidate(contextResult, score: 6_200)
         }
 
-        // 7. Generate phonetic variants
-        let variants = generatePhoneticVariants(corrected)
-        for variant in variants {
-            addSuggestion(variant)
+        // 8. Generate phonetic variants
+        for (index, variant) in generatePhoneticVariants(corrected).enumerated() {
+            addCandidate(variant, score: 4_300 - index * 50)
         }
 
-        // 8. Simple fallback transliteration
+        // 9. Simple fallback transliteration
         let simpleResult = simpleTransliterate(corrected)
-        addSuggestion(simpleResult)
+        addCandidate(simpleResult, score: 3_500)
 
-        // 9. Try word ending patterns (for loanwords)
+        // 10. Try word ending patterns (for loanwords)
         if let endingResult = tryWordEndingPattern(corrected) {
-            addSuggestion(endingResult)
+            addCandidate(endingResult, score: 3_800)
         }
 
-        // 10. Fuzzy dictionary matches last. They are useful, but should not
+        // 11. Fuzzy dictionary matches. They are useful, but should not
         // outrank morphology for an exactly typed unknown word.
-        let fuzzyMatches = dictionary.findMatches(for: corrected, includeFuzzy: true)
-        for match in fuzzyMatches {
-            addSuggestion(match)
+        let fuzzyCandidates = dictionary.findCandidates(for: corrected, includeFuzzy: true, limit: 12)
+        for candidate in fuzzyCandidates {
+            switch candidate.source {
+            case .fuzzy, .substitution:
+                addCandidate(candidate.value, score: candidate.score)
+            case .exact, .prefix:
+                break
+            }
         }
 
         if corrected != lowercased {
-            let originalFuzzyMatches = dictionary.findMatches(for: lowercased, includeFuzzy: true)
-            for match in originalFuzzyMatches {
-                addSuggestion(match)
+            let originalFuzzyCandidates = dictionary.findCandidates(for: lowercased, includeFuzzy: true, limit: 12)
+            for candidate in originalFuzzyCandidates {
+                switch candidate.source {
+                case .fuzzy, .substitution:
+                    addCandidate(candidate.value, score: candidate.score - 150)
+                case .exact, .prefix:
+                    break
+                }
             }
         }
 
-        return Array(suggestions.prefix(8))
+        let ranked = candidates.sorted {
+            if $0.score == $1.score {
+                return $0.order < $1.order
+            }
+            return $0.score > $1.score
+        }
+
+        var seen = Set<String>()
+        var suggestions: [String] = []
+        for candidate in ranked {
+            if !seen.contains(candidate.text) {
+                seen.insert(candidate.text)
+                suggestions.append(candidate.text)
+            }
+            if suggestions.count >= 8 { break }
+        }
+
+        return suggestions
     }
 
     // ============================================
@@ -893,6 +936,64 @@ class FinglishConverter {
         }
 
         return nil
+    }
+
+    private func tryObjectCliticMatch(_ input: String) -> String? {
+        let lowered = input.lowercased()
+
+        for (suffix, farsiSuffix) in objectCliticSuffixes {
+            guard lowered.hasSuffix(suffix), lowered.count > suffix.count + 3 else { continue }
+
+            let base = String(lowered.dropLast(suffix.count))
+            guard looksLikeVerbTakingObject(base) else { continue }
+
+            if let baseFarsi = bestVerbBaseSuggestion(for: base) {
+                return baseFarsi + farsiSuffix
+            }
+        }
+
+        return nil
+    }
+
+    private func bestVerbBaseSuggestion(for base: String) -> String? {
+        if let colloquialMatch = tryColloquialMatch(base) {
+            return colloquialMatch
+        }
+
+        if let dictionaryMatch = dictionary.findMatches(for: base, includeFuzzy: false).first,
+           isPersianVerbPhrase(dictionaryMatch) {
+            return dictionaryMatch
+        }
+
+        let morphResult = morphologicalTransliterate(base)
+        if isPersianVerbPhrase(morphResult) {
+            return morphResult
+        }
+
+        return nil
+    }
+
+    private func looksLikeVerbTakingObject(_ base: String) -> Bool {
+        if base.hasPrefix("mi") || base.hasPrefix("nemi") || base.hasPrefix("nem") {
+            return true
+        }
+
+        if checkPastTense(base) {
+            return true
+        }
+
+        return matchesVerbPattern(base)
+    }
+
+    private func isPersianVerbPhrase(_ value: String) -> Bool {
+        value.contains("می") ||
+            value.contains("نمی") ||
+            value.hasSuffix("م") ||
+            value.hasSuffix("ی") ||
+            value.hasSuffix("ه") ||
+            value.hasSuffix("یم") ||
+            value.hasSuffix("ین") ||
+            value.hasSuffix("ن")
     }
 
     // ============================================
@@ -1221,11 +1322,9 @@ class FinglishConverter {
 
         // 3. Handle gh -> غ vs ق
         if input.contains("gh") {
-            let withGhain = input.replacingOccurrences(of: "gh", with: "GHAIN_TEMP")
-            var temp = contextAwareTransliterate(withGhain.replacingOccurrences(of: "GHAIN_TEMP", with: ""))
-            temp = temp.replacingOccurrences(of: "غ", with: "ق")
-            if !variants.contains(temp) {
-                variants.append(temp)
+            let withQaf = contextAwareTransliterate(input.replacingOccurrences(of: "gh", with: "q"))
+            if withQaf != base && !variants.contains(withQaf) {
+                variants.append(cleanupResult(withQaf))
             }
         }
 

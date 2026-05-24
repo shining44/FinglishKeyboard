@@ -1,13 +1,42 @@
 import Foundation
 
+struct FinglishDictionaryCandidate {
+    let value: String
+    let matchedKey: String
+    let score: Int
+    let source: MatchSource
+
+    enum MatchSource {
+        case exact
+        case prefix
+        case substitution
+        case fuzzy
+    }
+}
+
 class FinglishDictionary {
 
     static let shared = FinglishDictionary()
 
     private var wordMap: [String: [String]] = [:]
     private var prefixMap: [String: [(String, [String])]] = [:]
+    private var keyedFrequencyMap: [String: [String: Int]] = [:]
     private var frequencyMap: [String: Int] = [:]
     private var nextWordMap: [String: [(String, Int)]] = [:]  // For predictive text
+    private let prefixExcludedKeys: Set<String> = [
+        "salary",
+        "everything",
+        "interesting",
+        "strange",
+        "what did you say",
+        "what are you doing",
+        "where are you",
+        "who are you",
+        "what's the plan",
+        "hopefully",
+        "cant",
+        "news"
+    ]
 
     private init() {
         buildDictionary()
@@ -29,91 +58,117 @@ class FinglishDictionary {
     }
 
     func findMatches(for input: String, includeFuzzy: Bool = true) -> [String] {
-        let lowercased = input.lowercased()
-        var matches: [(String, Int)] = []
+        findCandidates(for: input, includeFuzzy: includeFuzzy).map { $0.value }
+    }
 
-        // Exact match - highest priority
+    func findCandidates(for input: String, includeFuzzy: Bool = true, limit: Int = 8) -> [FinglishDictionaryCandidate] {
+        let lowercased = input.lowercased()
+        var candidates: [FinglishDictionaryCandidate] = []
+
+        // Exact match - highest priority and scored by the specific Finglish key.
         if let exactMatches = wordMap[lowercased] {
             for word in exactMatches {
-                let freq = frequencyMap[word] ?? 0
-                matches.append((word, freq + 1000))
+                let freq = keyedFrequency(for: lowercased, value: word)
+                candidates.append(FinglishDictionaryCandidate(
+                    value: word,
+                    matchedKey: lowercased,
+                    score: 10_000 + freq * 10,
+                    source: .exact
+                ))
             }
         }
 
-        // Prefix matches from index
+        // Prefix matches from index. Short completions beat distant completions.
         let prefixKey = String(lowercased.prefix(2))
         if let prefixEntries = prefixMap[prefixKey] {
             for (key, values) in prefixEntries {
                 if key.hasPrefix(lowercased) && key != lowercased {
+                    guard !prefixExcludedKeys.contains(key) else { continue }
                     for word in values {
-                        let freq = frequencyMap[word] ?? 0
-                        let lengthBonus = key.count == lowercased.count + 1 ? 500 : 0
-                        matches.append((word, freq + lengthBonus))
+                        let freq = keyedFrequency(for: key, value: word)
+                        let extraCharacters = max(key.count - lowercased.count, 0)
+                        let completionBonus = extraCharacters == 1 ? 1_000 : max(0, 600 - extraCharacters * 80)
+                        let distancePenalty = extraCharacters * 180
+                        let shortPrefixPenalty = lowercased.count < 4 && extraCharacters > 2 ? 1_500 : 0
+                        candidates.append(FinglishDictionaryCandidate(
+                            value: word,
+                            matchedKey: key,
+                            score: 6_000 + completionBonus + freq * 5 - distancePenalty - shortPrefixPenalty,
+                            source: .prefix
+                        ))
                     }
                 }
             }
         }
 
-        // Fuzzy matching - find words within edit distance 1-2
-        if includeFuzzy && matches.count < 6 && lowercased.count >= 3 {
-            let fuzzyMatches = findFuzzyMatches(for: lowercased, maxDistance: 2)
-            for (word, distance) in fuzzyMatches {
-                let freq = frequencyMap[word] ?? 0
-                let distancePenalty = distance * 200
-                matches.append((word, freq + 300 - distancePenalty))
-            }
+        if includeFuzzy && candidates.count < 12 && lowercased.count >= 3 {
+            appendFuzzyCandidates(for: lowercased, into: &candidates)
+            appendSubstitutionCandidates(for: lowercased, into: &candidates)
         }
 
-        // Sort by frequency/priority and remove duplicates
-        let sorted = matches.sorted {
-            if $0.1 == $1.1 {
-                return $0.0 < $1.0
+        return ranked(candidates, limit: limit)
+    }
+
+    private func appendFuzzyCandidates(for input: String, into candidates: inout [FinglishDictionaryCandidate]) {
+        let prefixKey = String(input.prefix(2))
+
+        guard let prefixEntries = prefixMap[prefixKey] else { return }
+
+        for (key, values) in prefixEntries {
+            let distance = levenshteinDistance(input, key)
+            guard distance > 0 && distance <= 2 else { continue }
+
+            for word in values {
+                let freq = keyedFrequency(for: key, value: word)
+                candidates.append(FinglishDictionaryCandidate(
+                    value: word,
+                    matchedKey: key,
+                    score: 3_000 + freq * 5 - distance * 700,
+                    source: .fuzzy
+                ))
             }
-            return $0.1 > $1.1
+        }
+    }
+
+    private func appendSubstitutionCandidates(for input: String, into candidates: inout [FinglishDictionaryCandidate]) {
+        let substitutions = getCommonSubstitutions(for: input)
+
+        for key in substitutions {
+            if let exactMatches = wordMap[key] {
+                for word in exactMatches {
+                    let freq = keyedFrequency(for: key, value: word)
+                    candidates.append(FinglishDictionaryCandidate(
+                        value: word,
+                        matchedKey: key,
+                        score: 4_500 + freq * 5,
+                        source: .substitution
+                    ))
+                }
+            }
+        }
+    }
+
+    private func ranked(_ candidates: [FinglishDictionaryCandidate], limit: Int) -> [FinglishDictionaryCandidate] {
+        let sorted = candidates.sorted {
+            if $0.score == $1.score {
+                if $0.matchedKey == $1.matchedKey {
+                    return $0.value < $1.value
+                }
+                return $0.matchedKey < $1.matchedKey
+            }
+            return $0.score > $1.score
         }
         var seen = Set<String>()
-        var result: [String] = []
-        for (word, _) in sorted {
-            if !seen.contains(word) {
-                seen.insert(word)
-                result.append(word)
+        var result: [FinglishDictionaryCandidate] = []
+        for candidate in sorted {
+            if !seen.contains(candidate.value) {
+                seen.insert(candidate.value)
+                result.append(candidate)
             }
-            if result.count >= 8 { break }
+            if result.count >= limit { break }
         }
 
         return result
-    }
-
-    // Find words within a given edit distance (Levenshtein)
-    private func findFuzzyMatches(for input: String, maxDistance: Int) -> [(String, Int)] {
-        var results: [(String, Int)] = []
-        let prefixKey = String(input.prefix(2))
-
-        // Check words with same prefix
-        if let prefixEntries = prefixMap[prefixKey] {
-            for (key, values) in prefixEntries {
-                let distance = levenshteinDistance(input, key)
-                if distance > 0 && distance <= maxDistance {
-                    for word in values {
-                        results.append((word, distance))
-                    }
-                }
-            }
-        }
-
-        // Also check with common letter substitutions
-        let substitutions = getCommonSubstitutions(for: input)
-        for sub in substitutions {
-            if let exactMatches = wordMap[sub] {
-                for word in exactMatches {
-                    if !results.contains(where: { $0.0 == word }) {
-                        results.append((word, 1))
-                    }
-                }
-            }
-        }
-
-        return results
     }
 
     // Levenshtein distance calculation
@@ -168,6 +223,10 @@ class FinglishDictionary {
         }
 
         return results
+    }
+
+    private func keyedFrequency(for key: String, value: String) -> Int {
+        keyedFrequencyMap[key]?[value] ?? frequencyMap[value] ?? 50
     }
 
     private func buildPrefixIndex() {
@@ -5003,6 +5062,93 @@ class FinglishDictionary {
         ])
 
         // ===========================================
+        // HIGH-IMPACT CONVERSATIONAL FORMS
+        // ===========================================
+        addWords([
+            // Common pronoun/preposition spellings
+            ("tu", ["تو"], 100),
+            ("too", ["تو"], 98),
+            ("tuye", ["توی"], 98),
+            ("tooye", ["توی"], 98),
+            ("toye", ["توی"], 96),
+            ("tuy", ["توی"], 94),
+
+            // Preposition + pronoun clitics
+            ("azam", ["ازم"], 100),
+            ("azat", ["ازت"], 100),
+            ("azash", ["ازش"], 100),
+            ("azemun", ["ازمون"], 94),
+            ("azemoon", ["ازمون"], 94),
+            ("azetun", ["ازتون"], 94),
+            ("azetoon", ["ازتون"], 94),
+            ("azeshun", ["ازشون"], 94),
+            ("azeshaan", ["ازشون"], 90),
+            ("baram", ["برام"], 100),
+            ("barat", ["برات"], 100),
+            ("barash", ["براش"], 100),
+            ("baramun", ["برامون"], 94),
+            ("baramoon", ["برامون"], 94),
+            ("baratun", ["براتون"], 94),
+            ("baratoon", ["براتون"], 94),
+            ("barashun", ["براشون"], 94),
+            ("barashoon", ["براشون"], 94),
+            ("behem", ["بهم"], 100),
+            ("behet", ["بهت"], 100),
+            ("behesh", ["بهش"], 100),
+            ("behemun", ["بهمون"], 94),
+            ("behemoon", ["بهمون"], 94),
+            ("behetun", ["بهتون"], 94),
+            ("behetoon", ["بهتون"], 94),
+            ("beheshun", ["بهشون"], 94),
+            ("beheshon", ["بهشون"], 92),
+            ("baham", ["باهام"], 100),
+            ("bahat", ["باهات"], 100),
+            ("bahash", ["باهاش"], 100),
+            ("bahamun", ["باهامون"], 94),
+            ("bahamoon", ["باهامون"], 94),
+            ("bahatun", ["باهاتون"], 94),
+            ("bahatoon", ["باهاتون"], 94),
+            ("bahashun", ["باهاشون"], 94),
+            ("bahashoon", ["باهاشون"], 94),
+
+            // Ambiguity fixes and conversational location forms
+            ("abi", ["آبی"], 100),
+            ("aabi", ["آبی"], 98),
+            ("abji", ["آبجی"], 98),
+            ("aabji", ["آبجی"], 98),
+            ("abjee", ["آبجی"], 94),
+            ("unja", ["اونجا"], 100),
+            ("oonja", ["اونجا"], 100),
+            ("onja", ["اونجا"], 96),
+            ("anja", ["آنجا"], 96),
+            ("aanja", ["آنجا"], 96),
+            ("khastam", ["خواستم"], 100),
+            ("khasteam", ["خستم"], 96),
+
+            // Compressed texting variants for high-frequency verbs
+            ("nmidonm", ["نمی‌دونم"], 98),
+            ("nmidoonm", ["نمی‌دونم"], 98),
+            ("nmidunm", ["نمی‌دونم"], 98),
+            ("nmidooni", ["نمی‌دونی"], 96),
+            ("nmidoni", ["نمی‌دونی"], 96),
+            ("nmiknm", ["نمی‌کنم"], 95),
+            ("nmikonm", ["نمی‌کنم"], 95),
+            ("mikonm", ["می‌کنم"], 96),
+            ("miknm", ["می‌کنم"], 94),
+            ("mkhay", ["می‌خوای"], 96),
+            ("mikhay", ["می‌خوای"], 98),
+            ("mkhad", ["می‌خواد"], 95),
+            ("mkhastam", ["می‌خواستم"], 94),
+            ("mikhastam", ["می‌خواستم"], 96),
+            ("mikhasti", ["می‌خواستی"], 94),
+            ("mtnm", ["می‌تونم"], 96),
+            ("mitunm", ["می‌تونم"], 95),
+            ("mitoonm", ["می‌تونم"], 95),
+            ("nmitunm", ["نمی‌تونم"], 96),
+            ("nmitoonm", ["نمی‌تونم"], 96),
+        ])
+
+        // ===========================================
         // EXPANDED TYPO CORRECTIONS IN DICTIONARY
         // ===========================================
         addWords([
@@ -5091,6 +5237,7 @@ class FinglishDictionary {
                 wordMap[key] = values
             }
             for value in values {
+                keyedFrequencyMap[key, default: [:]][value] = max(keyedFrequencyMap[key]?[value] ?? 0, frequency)
                 frequencyMap[value] = max(frequencyMap[value] ?? 0, frequency)
             }
         }
@@ -5102,6 +5249,10 @@ class FinglishDictionary {
                 wordMap[key]?.append(contentsOf: values)
             } else {
                 wordMap[key] = values
+            }
+            for value in values {
+                keyedFrequencyMap[key, default: [:]][value] = max(keyedFrequencyMap[key]?[value] ?? 0, 50)
+                frequencyMap[value] = max(frequencyMap[value] ?? 0, 50)
             }
         }
     }
