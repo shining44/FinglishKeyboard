@@ -78,11 +78,12 @@ class KeyboardState: ObservableObject {
 
     private let converter = FinglishConverter()
     private let dictionary = FinglishDictionary.shared
+    private let userLexicon = UserLexicon.shared
     private var lastShiftTapTime: Date?
     private var previousFarsiWord: String = ""  // For next-word prediction
     private let sentenceEndings: Set<Character> = [".", "!", "?", "؟", "۔"]
-    // Undo history - stores (inserted farsi text, original finglish text)
-    private var undoStack: [(farsi: String, finglish: String)] = []
+    // Undo history - stores enough context to reverse learning when a correction is rejected.
+    private var undoStack: [(farsi: String, finglish: String, previousFarsi: String)] = []
     private let maxUndoHistory = 10
     @Published var canUndo = false
 
@@ -118,13 +119,17 @@ class KeyboardState: ObservableObject {
         syncCurrentWordFromDocument()
 
         let originalFinglish = currentWord
-        replaceCurrentWord(with: text, originalFinglish: originalFinglish, recordUndo: true)
+        replaceCurrentWord(with: text, originalFinglish: originalFinglish, recordUndo: true, learningWeight: 5)
     }
 
     func insertPrediction(_ text: String) {
         guard let proxy = textDocumentProxy else { return }
 
+        let previousWord = previousFarsiWord
         proxy.insertText(text + " ")
+        if !previousWord.isEmpty {
+            userLexicon.recordNextWordChoice(after: previousWord, next: text, weight: 5)
+        }
         previousFarsiWord = text
         currentWord = ""
         updateSuggestions()
@@ -146,8 +151,14 @@ class KeyboardState: ObservableObject {
             proxy.deleteBackward()
         }
 
+        userLexicon.recordSuggestionRejection(input: lastEntry.finglish, output: lastEntry.farsi, weight: 3)
+        if !lastEntry.previousFarsi.isEmpty {
+            userLexicon.recordNextWordRejection(after: lastEntry.previousFarsi, next: lastEntry.farsi, weight: 1)
+        }
+
         // Restore the Finglish text
         proxy.insertText(lastEntry.finglish)
+        previousFarsiWord = lastEntry.previousFarsi
         currentWord = lastEntry.finglish
         updateSuggestions()
 
@@ -167,7 +178,7 @@ class KeyboardState: ObservableObject {
 
         if !currentWord.isEmpty {
             if let firstSuggestion = suggestions.first {
-                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true)
+                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true, learningWeight: 1)
                 previousFarsiWord = firstSuggestion  // Track for next-word prediction
             } else {
                 previousFarsiWord = ""
@@ -225,7 +236,7 @@ class KeyboardState: ObservableObject {
 
         if !currentWord.isEmpty {
             if let firstSuggestion = suggestions.first {
-                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true)
+                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true, learningWeight: 1)
             } else {
                 previousFarsiWord = ""
             }
@@ -303,7 +314,7 @@ class KeyboardState: ObservableObject {
 
         if !currentWord.isEmpty {
             if let firstSuggestion = suggestions.first {
-                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true)
+                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true, learningWeight: 1)
             } else {
                 previousFarsiWord = ""
             }
@@ -377,17 +388,20 @@ class KeyboardState: ObservableObject {
         if currentWord.isEmpty {
             // Show next-word predictions when no word is being typed
             if !previousFarsiWord.isEmpty {
-                suggestions = dictionary.getNextWordPredictions(after: previousFarsiWord)
+                let basePredictions = dictionary.getNextWordPredictions(after: previousFarsiWord)
+                suggestions = userLexicon.rankedPredictions(after: previousFarsiWord, base: basePredictions)
             } else {
                 suggestions = []
             }
         } else {
-            suggestions = converter.getSuggestions(for: currentWord)
+            let baseSuggestions = converter.getSuggestions(for: currentWord)
+            suggestions = userLexicon.rankedSuggestions(for: currentWord, base: baseSuggestions)
         }
     }
 
-    private func replaceCurrentWord(with replacement: String, originalFinglish: String, recordUndo: Bool) {
+    private func replaceCurrentWord(with replacement: String, originalFinglish: String, recordUndo: Bool, learningWeight: Int = 0) {
         guard let proxy = textDocumentProxy else { return }
+        let previousBeforeReplacement = previousFarsiWord
 
         for _ in originalFinglish {
             proxy.deleteBackward()
@@ -396,11 +410,18 @@ class KeyboardState: ObservableObject {
         proxy.insertText(replacement)
 
         if recordUndo {
-            undoStack.append((farsi: replacement, finglish: originalFinglish))
+            undoStack.append((farsi: replacement, finglish: originalFinglish, previousFarsi: previousBeforeReplacement))
             if undoStack.count > maxUndoHistory {
                 undoStack.removeFirst()
             }
             canUndo = true
+        }
+
+        if learningWeight > 0 {
+            userLexicon.recordSuggestionChoice(input: originalFinglish, output: replacement, weight: learningWeight)
+            if !previousBeforeReplacement.isEmpty {
+                userLexicon.recordNextWordChoice(after: previousBeforeReplacement, next: replacement, weight: learningWeight)
+            }
         }
 
         previousFarsiWord = replacement
@@ -443,5 +464,166 @@ class KeyboardState: ObservableObject {
         case .continue: return "Continue"
         default: return "return"
         }
+    }
+}
+
+final class UserLexicon {
+    static let shared = UserLexicon()
+
+    private let defaults = UserDefaults.standard
+    private let suggestionChoicesKey = "FinglishKeyboard.UserLexicon.suggestionChoices.v1"
+    private let nextWordChoicesKey = "FinglishKeyboard.UserLexicon.nextWordChoices.v1"
+    private let maxInputs = 500
+    private let maxCandidatesPerInput = 12
+
+    private var suggestionChoices: [String: [String: Int]]
+    private var nextWordChoices: [String: [String: Int]]
+
+    private init() {
+        suggestionChoices = Self.loadCounts(from: defaults, key: suggestionChoicesKey)
+        nextWordChoices = Self.loadCounts(from: defaults, key: nextWordChoicesKey)
+    }
+
+    func rankedSuggestions(for input: String, base: [String], limit: Int = 8) -> [String] {
+        let key = normalizedFinglish(input)
+        guard !key.isEmpty else { return Array(base.prefix(limit)) }
+        return rankedResults(learned: suggestionChoices[key] ?? [:], base: base, limit: limit)
+    }
+
+    func rankedPredictions(after previousWord: String, base: [String], limit: Int = 8) -> [String] {
+        let key = normalizedFarsi(previousWord)
+        guard !key.isEmpty else { return Array(base.prefix(limit)) }
+        return rankedResults(learned: nextWordChoices[key] ?? [:], base: base, limit: limit)
+    }
+
+    func recordSuggestionChoice(input: String, output: String, weight: Int) {
+        adjust(&suggestionChoices, key: normalizedFinglish(input), value: normalizedFarsi(output), delta: max(weight, 1))
+        prune(&suggestionChoices)
+        saveSuggestions()
+    }
+
+    func recordSuggestionRejection(input: String, output: String, weight: Int) {
+        adjust(&suggestionChoices, key: normalizedFinglish(input), value: normalizedFarsi(output), delta: -max(weight, 1))
+        prune(&suggestionChoices)
+        saveSuggestions()
+    }
+
+    func recordNextWordChoice(after previousWord: String, next: String, weight: Int) {
+        adjust(&nextWordChoices, key: normalizedFarsi(previousWord), value: normalizedFarsi(next), delta: max(weight, 1))
+        prune(&nextWordChoices)
+        saveNextWords()
+    }
+
+    func recordNextWordRejection(after previousWord: String, next: String, weight: Int) {
+        adjust(&nextWordChoices, key: normalizedFarsi(previousWord), value: normalizedFarsi(next), delta: -max(weight, 1))
+        prune(&nextWordChoices)
+        saveNextWords()
+    }
+
+    private func rankedResults(learned: [String: Int], base: [String], limit: Int) -> [String] {
+        let baseRank = Dictionary(uniqueKeysWithValues: base.enumerated().map { ($0.element, $0.offset) })
+        var seen = Set<String>()
+        var results: [String] = []
+
+        let learnedResults = learned
+            .filter { $0.value > 0 }
+            .sorted {
+                if $0.value != $1.value {
+                    return $0.value > $1.value
+                }
+                return (baseRank[$0.key] ?? Int.max) < (baseRank[$1.key] ?? Int.max)
+            }
+
+        for (candidate, _) in learnedResults {
+            append(candidate, to: &results, seen: &seen, limit: limit)
+        }
+
+        for candidate in base {
+            append(candidate, to: &results, seen: &seen, limit: limit)
+        }
+
+        return results
+    }
+
+    private func append(_ candidate: String, to results: inout [String], seen: inout Set<String>, limit: Int) {
+        guard results.count < limit, !candidate.isEmpty, !seen.contains(candidate) else { return }
+        seen.insert(candidate)
+        results.append(candidate)
+    }
+
+    private func adjust(_ map: inout [String: [String: Int]], key: String, value: String, delta: Int) {
+        guard !key.isEmpty, !value.isEmpty, delta != 0 else { return }
+
+        var values = map[key] ?? [:]
+        let updated = (values[value] ?? 0) + delta
+        if updated > 0 {
+            values[value] = updated
+        } else {
+            values.removeValue(forKey: value)
+        }
+
+        if values.isEmpty {
+            map.removeValue(forKey: key)
+        } else {
+            map[key] = values
+        }
+    }
+
+    private func prune(_ map: inout [String: [String: Int]]) {
+        for key in Array(map.keys) {
+            let topCandidates = (map[key] ?? [:])
+                .sorted {
+                    if $0.value != $1.value {
+                        return $0.value > $1.value
+                    }
+                    return $0.key < $1.key
+                }
+                .prefix(maxCandidatesPerInput)
+
+            map[key] = Dictionary(uniqueKeysWithValues: topCandidates.map { ($0.key, $0.value) })
+        }
+
+        if map.count > maxInputs {
+            let topInputs = map
+                .sorted { totalWeight($0.value) > totalWeight($1.value) }
+                .prefix(maxInputs)
+
+            map = Dictionary(uniqueKeysWithValues: topInputs.map { ($0.key, $0.value) })
+        }
+    }
+
+    private func totalWeight(_ values: [String: Int]) -> Int {
+        values.values.reduce(0, +)
+    }
+
+    private func normalizedFinglish(_ input: String) -> String {
+        input
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+    }
+
+    private func normalizedFarsi(_ input: String) -> String {
+        input.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func saveSuggestions() {
+        Self.saveCounts(suggestionChoices, to: defaults, key: suggestionChoicesKey)
+    }
+
+    private func saveNextWords() {
+        Self.saveCounts(nextWordChoices, to: defaults, key: nextWordChoicesKey)
+    }
+
+    private static func loadCounts(from defaults: UserDefaults, key: String) -> [String: [String: Int]] {
+        guard let data = defaults.data(forKey: key),
+              let counts = try? JSONDecoder().decode([String: [String: Int]].self, from: data) else {
+            return [:]
+        }
+        return counts
+    }
+
+    private static func saveCounts(_ counts: [String: [String: Int]], to defaults: UserDefaults, key: String) {
+        guard let data = try? JSONEncoder().encode(counts) else { return }
+        defaults.set(data, forKey: key)
     }
 }
