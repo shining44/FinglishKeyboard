@@ -142,7 +142,7 @@ struct KeyboardView: View {
                         if state.usePersianNumbers {
                             state.insertPersianNumber(key)
                         } else {
-                            state.textDocumentProxy?.insertText(key)
+                            state.insertRawText(key)
                         }
                         triggerHaptic()
                     })
@@ -152,7 +152,7 @@ struct KeyboardView: View {
             HStack(spacing: 6) {
                 ForEach(numberRows[1], id: \.self) { key in
                     KeyButton(title: key, action: {
-                        state.textDocumentProxy?.insertText(key)
+                        state.insertRawText(key)
                         triggerHaptic()
                     })
                 }
@@ -180,7 +180,7 @@ struct KeyboardView: View {
             HStack(spacing: 6) {
                 ForEach(symbolRows[0], id: \.self) { key in
                     KeyButton(title: key, action: {
-                        state.textDocumentProxy?.insertText(key)
+                        state.insertRawText(key)
                         triggerHaptic()
                     })
                 }
@@ -189,7 +189,7 @@ struct KeyboardView: View {
             HStack(spacing: 6) {
                 ForEach(symbolRows[1], id: \.self) { key in
                     KeyButton(title: key, action: {
-                        state.textDocumentProxy?.insertText(key)
+                        state.insertRawText(key)
                         triggerHaptic()
                     })
                 }
@@ -445,22 +445,18 @@ struct ZWNJKey: View {
                     .fill(colorScheme == .dark ? Color(white: 0.35) : Color(white: 0.68))
                     .shadow(color: Color.black.opacity(0.25), radius: 0, x: 0, y: 1)
 
-                Text("‌") // ZWNJ symbol
-                    .font(.system(size: 12, weight: .medium))
+                Text("ن‌م")
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .overlay(
-                        Text("‌‌") // Visual indicator
-                            .font(.system(size: 8))
-                            .foregroundColor(.gray)
-                    )
 
                 // Visual line indicator for half-space
                 Rectangle()
                     .fill(colorScheme == .dark ? Color.white.opacity(0.5) : Color.black.opacity(0.3))
-                    .frame(width: 2, height: 16)
+                    .frame(width: 1, height: 18)
             }
         }
         .frame(width: 32, height: 42)
+        .accessibilityLabel("Half-space")
     }
 
     private func triggerHaptic() {

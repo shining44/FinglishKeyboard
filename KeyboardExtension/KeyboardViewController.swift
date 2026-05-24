@@ -81,7 +81,6 @@ class KeyboardState: ObservableObject {
     private var lastShiftTapTime: Date?
     private var previousFarsiWord: String = ""  // For next-word prediction
     private let sentenceEndings: Set<Character> = [".", "!", "?", "؟", "۔"]
-
     // Undo history - stores (inserted farsi text, original finglish text)
     private var undoStack: [(farsi: String, finglish: String)] = []
     private let maxUndoHistory = 10
@@ -95,6 +94,7 @@ class KeyboardState: ObservableObject {
 
     func insertText(_ text: String) {
         guard let proxy = textDocumentProxy else { return }
+        syncCurrentWordFromDocument()
 
         let textToInsert: String
         if isShiftEnabled || isCapsLock {
@@ -115,25 +115,19 @@ class KeyboardState: ObservableObject {
 
     func insertFarsi(_ text: String) {
         guard let proxy = textDocumentProxy else { return }
+        syncCurrentWordFromDocument()
 
         let originalFinglish = currentWord
-        let wordLength = currentWord.count
-        for _ in 0..<wordLength {
-            proxy.deleteBackward()
-        }
+        replaceCurrentWord(with: text, originalFinglish: originalFinglish, recordUndo: true)
+    }
 
-        proxy.insertText(text)
+    func insertPrediction(_ text: String) {
+        guard let proxy = textDocumentProxy else { return }
 
-        // Track for undo
-        undoStack.append((farsi: text, finglish: originalFinglish))
-        if undoStack.count > maxUndoHistory {
-            undoStack.removeFirst()
-        }
-        canUndo = true
-
-        previousFarsiWord = text  // Track for next-word prediction
+        proxy.insertText(text + " ")
+        previousFarsiWord = text
         currentWord = ""
-        suggestions = []
+        updateSuggestions()
     }
 
     // Undo last inserted Farsi word - restore original Finglish
@@ -141,7 +135,13 @@ class KeyboardState: ObservableObject {
         guard let proxy = textDocumentProxy,
               let lastEntry = undoStack.popLast() else { return }
 
-        // Delete the Farsi word
+        guard (proxy.documentContextBeforeInput ?? "").hasSuffix(lastEntry.farsi) else {
+            currentWord = trailingFinglishWord(in: proxy.documentContextBeforeInput ?? "")
+            updateSuggestions()
+            canUndo = !undoStack.isEmpty
+            return
+        }
+
         for _ in lastEntry.farsi {
             proxy.deleteBackward()
         }
@@ -157,25 +157,20 @@ class KeyboardState: ObservableObject {
     func deleteBackward() {
         guard let proxy = textDocumentProxy else { return }
 
-        if !currentWord.isEmpty {
-            currentWord.removeLast()
-            updateSuggestions()
-        }
-
         proxy.deleteBackward()
+        syncCurrentWordFromDocument()
     }
 
     func insertSpace() {
         guard let proxy = textDocumentProxy else { return }
+        syncCurrentWordFromDocument()
 
         if !currentWord.isEmpty {
             if let firstSuggestion = suggestions.first {
-                let wordLength = currentWord.count
-                for _ in 0..<wordLength {
-                    proxy.deleteBackward()
-                }
-                proxy.insertText(firstSuggestion)
+                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true)
                 previousFarsiWord = firstSuggestion  // Track for next-word prediction
+            } else {
+                previousFarsiWord = ""
             }
         }
 
@@ -226,14 +221,13 @@ class KeyboardState: ObservableObject {
 
     func insertReturn() {
         guard let proxy = textDocumentProxy else { return }
+        syncCurrentWordFromDocument()
 
         if !currentWord.isEmpty {
             if let firstSuggestion = suggestions.first {
-                let wordLength = currentWord.count
-                for _ in 0..<wordLength {
-                    proxy.deleteBackward()
-                }
-                proxy.insertText(firstSuggestion)
+                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true)
+            } else {
+                previousFarsiWord = ""
             }
         }
 
@@ -277,7 +271,8 @@ class KeyboardState: ObservableObject {
     func insertDirectFarsi(_ text: String) {
         guard let proxy = textDocumentProxy else { return }
         proxy.insertText(text)
-        // Don't affect the current word tracking for direct Farsi insertion
+        currentWord = ""
+        suggestions = []
     }
 
     // Insert Persian numeral
@@ -288,34 +283,43 @@ class KeyboardState: ObservableObject {
         } else {
             proxy.insertText(number)
         }
+        previousFarsiWord = ""
+        currentWord = ""
+        suggestions = []
+    }
+
+    func insertRawText(_ text: String) {
+        guard let proxy = textDocumentProxy else { return }
+        proxy.insertText(text)
+        previousFarsiWord = ""
+        currentWord = ""
+        suggestions = []
     }
 
     // Insert punctuation - finalize current word first, then insert punctuation
     func insertPunctuation(_ punctuation: String) {
         guard let proxy = textDocumentProxy else { return }
+        syncCurrentWordFromDocument()
 
-        // Finalize the current word before inserting punctuation
         if !currentWord.isEmpty {
             if let firstSuggestion = suggestions.first {
-                let wordLength = currentWord.count
-                for _ in 0..<wordLength {
-                    proxy.deleteBackward()
-                }
-                proxy.insertText(firstSuggestion)
-                previousFarsiWord = firstSuggestion
+                replaceCurrentWord(with: firstSuggestion, originalFinglish: currentWord, recordUndo: true)
+            } else {
+                previousFarsiWord = ""
             }
-            currentWord = ""
-            suggestions = []
         }
 
-        // Now insert the punctuation
         proxy.insertText(punctuation)
+        currentWord = ""
+        suggestions = []
     }
 
     // Insert Zero-Width Non-Joiner (half-space)
     func insertZWNJ() {
         guard let proxy = textDocumentProxy else { return }
         proxy.insertText("\u{200C}")  // ZWNJ character
+        currentWord = ""
+        suggestions = []
     }
 
     // Toggle Persian numbers on/off
@@ -327,25 +331,29 @@ class KeyboardState: ObservableObject {
     func moveCursorLeft() {
         guard let proxy = textDocumentProxy else { return }
         proxy.adjustTextPosition(byCharacterOffset: -1)
+        syncCurrentWordFromDocument()
     }
 
     // Move cursor right
     func moveCursorRight() {
         guard let proxy = textDocumentProxy else { return }
         proxy.adjustTextPosition(byCharacterOffset: 1)
+        syncCurrentWordFromDocument()
     }
 
     // Insert period after space (double-tap space behavior)
     func insertPeriodAfterSpace() {
         guard let proxy = textDocumentProxy else { return }
 
-        // Delete the space we just inserted
-        proxy.deleteBackward()
+        if proxy.documentContextBeforeInput?.last == " " {
+            proxy.deleteBackward()
+        }
 
         // Insert period and space (Farsi period: ۔ or standard period)
         proxy.insertText(". ")
 
         // Reset current word
+        previousFarsiWord = ""
         currentWord = ""
         suggestions = []
     }
@@ -353,6 +361,7 @@ class KeyboardState: ObservableObject {
     // Clear current word (delete all typed characters)
     func clearCurrentWord() {
         guard let proxy = textDocumentProxy else { return }
+        syncCurrentWordFromDocument()
 
         // Delete all characters in the current word
         let wordLength = currentWord.count
@@ -375,6 +384,48 @@ class KeyboardState: ObservableObject {
         } else {
             suggestions = converter.getSuggestions(for: currentWord)
         }
+    }
+
+    private func replaceCurrentWord(with replacement: String, originalFinglish: String, recordUndo: Bool) {
+        guard let proxy = textDocumentProxy else { return }
+
+        for _ in originalFinglish {
+            proxy.deleteBackward()
+        }
+
+        proxy.insertText(replacement)
+
+        if recordUndo {
+            undoStack.append((farsi: replacement, finglish: originalFinglish))
+            if undoStack.count > maxUndoHistory {
+                undoStack.removeFirst()
+            }
+            canUndo = true
+        }
+
+        previousFarsiWord = replacement
+        currentWord = ""
+        suggestions = []
+    }
+
+    private func syncCurrentWordFromDocument() {
+        let textBefore = textDocumentProxy?.documentContextBeforeInput ?? ""
+        currentWord = trailingFinglishWord(in: textBefore)
+        updateSuggestions()
+    }
+
+    private func trailingFinglishWord(in text: String) -> String {
+        var scalars: [UnicodeScalar] = []
+
+        for scalar in text.unicodeScalars.reversed() {
+            let isASCIIDigit = scalar.value >= 48 && scalar.value <= 57
+            let isUppercaseASCII = scalar.value >= 65 && scalar.value <= 90
+            let isLowercaseASCII = scalar.value >= 97 && scalar.value <= 122
+            guard isASCIIDigit || isUppercaseASCII || isLowercaseASCII else { break }
+            scalars.append(scalar)
+        }
+
+        return String(String.UnicodeScalarView(scalars.reversed()))
     }
 
     var returnKeyTitle: String {

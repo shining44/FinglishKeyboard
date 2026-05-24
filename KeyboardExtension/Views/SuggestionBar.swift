@@ -76,8 +76,7 @@ struct SuggestionBar: View {
                         isPrediction: state.currentWord.isEmpty,
                         action: {
                             if state.currentWord.isEmpty {
-                                // Next-word prediction - insert directly with space
-                                state.textDocumentProxy?.insertText(suggestion + " ")
+                                state.insertPrediction(suggestion)
                             } else {
                                 state.insertFarsi(suggestion)
                             }
