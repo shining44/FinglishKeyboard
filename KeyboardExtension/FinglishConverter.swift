@@ -675,7 +675,6 @@ class FinglishConverter {
         "bbin": "bebin", "bbiin": "bebin",
         "chkar": "chikar", "chikaar": "chikar",
         "kojii": "koji", "kojaayi": "kojayi", "kojay": "kojayi",
-        "kosh": "kojayi",
 
         // === INTERNET/TEXT SLANG ===
         "tnx": "mamnoon", "tx": "mamnoon", "thx": "mamnoon", "ty": "mamnoon",
@@ -749,19 +748,24 @@ class FinglishConverter {
         var candidates: [(text: String, score: Int, order: Int)] = []
         var order = 0
 
-        func addCandidate(_ s: String, score: Int) {
-            let cleaned = cleanupResult(s)
+        func addCandidate(_ s: String, score: Int, preservesCuratedSpelling: Bool = false) {
+            let cleaned = preservesCuratedSpelling ? s : cleanupResult(s)
             guard !cleaned.isEmpty else { return }
             candidates.append((cleaned, score, order))
             order += 1
         }
 
-        // 1. Apply typo correction if available
-        let corrected = typoCorrections[lowercased] ?? lowercased
+        // 1. Apply a typo alias only when the input is not already a real
+        // dictionary key. Several valid conversational words are one edit away
+        // from another word (mah/ma, yeki/yek, mikhan/mikham, chetore/chetor).
+        // Exact user intent must win over a broad correction rule.
+        let corrected = dictionary.hasExactMatch(for: lowercased)
+            ? lowercased
+            : (typoCorrections[lowercased] ?? lowercased)
 
         // 2. Check for direct colloquial match first (highest priority for common verbs)
         if let colloquialMatch = tryColloquialMatch(corrected) {
-            addCandidate(colloquialMatch, score: 12_000)
+            addCandidate(colloquialMatch, score: 12_000, preservesCuratedSpelling: true)
         }
 
         // 3. Handle object clitics before dictionary fallbacks.
@@ -773,20 +777,20 @@ class FinglishConverter {
         // delayed until after morphology so near-misses don't bury plausible words.
         let dictCandidates = dictionary.findCandidates(for: corrected, includeFuzzy: false, limit: 10)
         for candidate in dictCandidates {
-            addCandidate(candidate.value, score: candidate.score)
+            addCandidate(candidate.value, score: candidate.score, preservesCuratedSpelling: true)
         }
 
         // If typo was corrected, also try original
         if corrected != lowercased {
             let originalCandidates = dictionary.findCandidates(for: lowercased, includeFuzzy: false, limit: 10)
             for candidate in originalCandidates {
-                addCandidate(candidate.value, score: candidate.score - 150)
+                addCandidate(candidate.value, score: candidate.score - 150, preservesCuratedSpelling: true)
             }
         }
 
         // 5. Check for compound word matches
         if let compoundResult = tryCompoundMatch(corrected) {
-            addCandidate(compoundResult, score: 9_300)
+            addCandidate(compoundResult, score: 9_300, preservesCuratedSpelling: true)
         }
 
         // 6. Smart morphological transliteration
@@ -819,7 +823,7 @@ class FinglishConverter {
         for candidate in fuzzyCandidates {
             switch candidate.source {
             case .fuzzy, .substitution:
-                addCandidate(candidate.value, score: candidate.score)
+                addCandidate(candidate.value, score: candidate.score, preservesCuratedSpelling: true)
             case .exact, .prefix:
                 break
             }
@@ -830,7 +834,7 @@ class FinglishConverter {
             for candidate in originalFuzzyCandidates {
                 switch candidate.source {
                 case .fuzzy, .substitution:
-                    addCandidate(candidate.value, score: candidate.score - 150)
+                    addCandidate(candidate.value, score: candidate.score - 150, preservesCuratedSpelling: true)
                 case .exact, .prefix:
                     break
                 }
@@ -1418,37 +1422,13 @@ class FinglishConverter {
     }
 
     private func cleanupResult(_ input: String) -> String {
-        var result = input
-
-        // Remove diacritics placeholders if any
-        result = result.replacingOccurrences(of: "ِ", with: "")
-        result = result.replacingOccurrences(of: "ُ", with: "")
-
-        // Clean consecutive similar characters
-        let patterns = [
-            ("اا", "ا"),
-            ("آا", "آ"),
-            ("اآ", "آ"),
-            ("وو", "و"),
-            ("یی", "ی"),
-            ("هه", "ه"),
-            ("نن", "ن"),
-            ("مم", "م"),
-            ("رر", "ر"),
-            ("لل", "ل"),
-        ]
-
-        for (pattern, replacement) in patterns {
-            while result.contains(pattern) {
-                result = result.replacingOccurrences(of: pattern, with: replacement)
-            }
-        }
-
-        // Fix common issues
-        result = result.replacingOccurrences(of: "ءی", with: "ئی")
-        result = result.replacingOccurrences(of: "ءا", with: "ئا")
-
-        return result
+        // The converter uses kasra and damma as positional placeholders while
+        // generating unknown words. Strip only those generated placeholders;
+        // curated dictionary candidates bypass this function so their Persian
+        // spelling, repeated letters, hamza, tanvin, and ZWNJ stay lossless.
+        input
+            .replacingOccurrences(of: "ِ", with: "")
+            .replacingOccurrences(of: "ُ", with: "")
     }
 
     // Check if a word should have ZWNJ

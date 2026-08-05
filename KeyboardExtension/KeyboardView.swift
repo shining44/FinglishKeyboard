@@ -82,56 +82,40 @@ struct KeyboardView: View {
     }
 
     private var letterKeyboard: some View {
-        VStack(spacing: 10) {
-            // First row
-            HStack(spacing: 6) {
-                ForEach(letterRows[0], id: \.self) { key in
-                    KeyButton(
-                        title: displayTitle(for: key),
-                        action: { handleKeyPress(key) },
-                        alternates: alternates[key] ?? [],
-                        onAlternateSelected: { alt in
-                            state.insertDirectFarsi(alt)
-                        }
-                    )
-                }
-            }
+        VStack(spacing: 0) {
+            frequencyAwareRow(letterRows[0])
 
-            // Second row (slightly indented)
-            HStack(spacing: 6) {
-                ForEach(letterRows[1], id: \.self) { key in
-                    KeyButton(
-                        title: displayTitle(for: key),
-                        action: { handleKeyPress(key) },
-                        alternates: alternates[key] ?? [],
-                        onAlternateSelected: { alt in
-                            state.insertDirectFarsi(alt)
-                        }
-                    )
-                }
-            }
-            .padding(.horizontal, 18)
+            // Keep the familiar visual indent while allowing the outer margins
+            // to become deterministic touch area for A and L.
+            frequencyAwareRow(letterRows[1], visualHorizontalInset: 18)
 
             // Third row with shift and delete
             HStack(spacing: 6) {
                 ShiftKey(state: state)
 
-                HStack(spacing: 6) {
-                    ForEach(letterRows[2], id: \.self) { key in
-                        KeyButton(
-                            title: displayTitle(for: key),
-                            action: { handleKeyPress(key) },
-                            alternates: alternates[key] ?? [],
-                            onAlternateSelected: { alt in
-                                state.insertDirectFarsi(alt)
-                            }
-                        )
-                    }
-                }
+                frequencyAwareRow(letterRows[2])
+                    .frame(maxWidth: .infinity)
 
                 DeleteKey(state: state)
             }
+            .frame(height: 49)
         }
+    }
+
+    private func frequencyAwareRow(
+        _ keys: [String],
+        visualHorizontalInset: CGFloat = 0
+    ) -> some View {
+        KeyRow(
+            keys: keys,
+            previousCharacter: state.currentWord.last,
+            isWordStart: state.currentWord.isEmpty,
+            visualHorizontalInset: visualHorizontalInset,
+            title: { displayTitle(for: $0) },
+            action: { handleKeyPress($0) },
+            alternates: alternates,
+            onAlternateSelected: { state.insertDirectFarsi($0) }
+        )
     }
 
     private var numberKeyboard: some View {
@@ -144,7 +128,6 @@ struct KeyboardView: View {
                         } else {
                             state.insertRawText(key)
                         }
-                        triggerHaptic()
                     })
                 }
             }
@@ -153,7 +136,6 @@ struct KeyboardView: View {
                 ForEach(numberRows[1], id: \.self) { key in
                     KeyButton(title: key, action: {
                         state.insertRawText(key)
-                        triggerHaptic()
                     })
                 }
             }
@@ -165,7 +147,6 @@ struct KeyboardView: View {
                     ForEach(numberRows[2], id: \.self) { key in
                         KeyButton(title: key, action: {
                             state.insertPunctuation(key)
-                            triggerHaptic()
                         })
                     }
                 }
@@ -181,7 +162,6 @@ struct KeyboardView: View {
                 ForEach(symbolRows[0], id: \.self) { key in
                     KeyButton(title: key, action: {
                         state.insertRawText(key)
-                        triggerHaptic()
                     })
                 }
             }
@@ -190,7 +170,6 @@ struct KeyboardView: View {
                 ForEach(symbolRows[1], id: \.self) { key in
                     KeyButton(title: key, action: {
                         state.insertRawText(key)
-                        triggerHaptic()
                     })
                 }
             }
@@ -202,7 +181,6 @@ struct KeyboardView: View {
                     ForEach(symbolRows[2], id: \.self) { key in
                         KeyButton(title: key, action: {
                             state.insertPunctuation(key)
-                            triggerHaptic()
                         })
                     }
                 }
@@ -233,12 +211,6 @@ struct KeyboardView: View {
 
     private func handleKeyPress(_ key: String) {
         state.insertText(key)
-        triggerHaptic()
-    }
-
-    private func triggerHaptic() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.impactOccurred()
     }
 }
 
@@ -301,6 +273,7 @@ struct DeleteKey: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var isPressed = false
     @State private var deleteTimer: Timer?
+    @State private var repeatDelayWorkItem: DispatchWorkItem?
 
     var body: some View {
         Button(action: {}) {
@@ -325,19 +298,31 @@ struct DeleteKey: View {
                         state.deleteBackward()
                         triggerHaptic()
 
-                        // Start repeat delete after delay
-                        deleteTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-                            state.deleteBackward()
-                            triggerHaptic()
+                        // A tap deletes once. Repeating begins only after a
+                        // deliberate hold so brief presses never erase a run of text.
+                        let workItem = DispatchWorkItem {
+                            guard isPressed else { return }
+                            deleteTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { _ in
+                                guard isPressed else { return }
+                                state.deleteBackward()
+                            }
                         }
+                        repeatDelayWorkItem = workItem
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: workItem)
                     }
                 }
                 .onEnded { _ in
                     isPressed = false
+                    repeatDelayWorkItem?.cancel()
+                    repeatDelayWorkItem = nil
                     deleteTimer?.invalidate()
                     deleteTimer = nil
                 }
         )
+        .onDisappear {
+            repeatDelayWorkItem?.cancel()
+            deleteTimer?.invalidate()
+        }
     }
 
     private func triggerHaptic() {
@@ -422,7 +407,7 @@ struct GlobeKey: View {
                     .foregroundColor(colorScheme == .dark ? .white : .black)
             }
         }
-        .frame(width: 38, height: 42)
+        .frame(width: 44, height: 42)
     }
 
     private func triggerHaptic() {
@@ -455,7 +440,7 @@ struct ZWNJKey: View {
                     .frame(width: 1, height: 18)
             }
         }
-        .frame(width: 32, height: 42)
+        .frame(width: 44, height: 42)
         .accessibilityLabel("Half-space")
     }
 

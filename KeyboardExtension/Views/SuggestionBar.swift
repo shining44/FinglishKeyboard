@@ -57,9 +57,11 @@ struct SuggestionBar: View {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 14))
                                 .foregroundColor(.secondary)
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
                         }
                     }
-                    .padding(.horizontal, 8)
+                    .padding(.leading, 8)
 
                     Divider()
                         .frame(height: 24)
