@@ -1,12 +1,10 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var keyboardEnabled = false
     @State private var demoInput = ""
     @State private var demoSuggestions: [String] = []
 
     private let converter = DemoConverter()
-    private let keyboardBundleIdentifier = "com.alitayyebi.finglish.keyboard"
     private let exampleWords = [
         ExampleWord(finglish: "salam", farsi: "سلام"),
         ExampleWord(finglish: "mersi", farsi: "مرسی"),
@@ -37,7 +35,6 @@ struct ContentView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Finglish Keyboard")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear(perform: checkKeyboardEnabled)
         }
         .navigationViewStyle(.stack)
     }
@@ -87,19 +84,19 @@ struct ContentView: View {
             HStack(alignment: .center, spacing: 14) {
                 ZStack {
                     Circle()
-                        .fill(keyboardEnabled ? Color.green.opacity(0.16) : Color.orange.opacity(0.16))
+                        .fill(Color.blue.opacity(0.14))
                         .frame(width: 44, height: 44)
 
-                    Image(systemName: keyboardEnabled ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    Image(systemName: "keyboard.fill")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundColor(keyboardEnabled ? .green : .orange)
+                        .foregroundColor(.blue)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(keyboardEnabled ? "Keyboard is enabled" : "Keyboard setup needed")
+                    Text("Keyboard settings")
                         .font(.headline)
 
-                    Text(keyboardEnabled ? "Open any text field and use the globe key to switch to Finglish." : "Add Finglish Keyboard in iOS Settings to use it in Messages, Mail, Notes, and other apps.")
+                    Text("Add Finglish Keyboard in iOS Settings, then use the globe key to switch to it in any text field.")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -108,7 +105,7 @@ struct ContentView: View {
                 Spacer(minLength: 8)
 
                 Button(action: openSettings) {
-                    Text(keyboardEnabled ? "Settings" : "Set Up")
+                    Text("Open")
                         .font(.subheadline.weight(.semibold))
                 }
                 .buttonStyle(.borderedProminent)
@@ -166,7 +163,7 @@ struct ContentView: View {
                     SetupStepRow(
                         number: 1,
                         title: "Open this app in Settings",
-                        description: "Tap Set Up, then choose Keyboards.",
+                        description: "Tap Open, then choose Keyboards.",
                         isCompleted: false,
                         action: openSettings
                     )
@@ -177,7 +174,7 @@ struct ContentView: View {
                         number: 2,
                         title: "Add Finglish Keyboard",
                         description: "In Keyboards, enable Finglish Keyboard.",
-                        isCompleted: keyboardEnabled
+                        isCompleted: false
                     )
 
                     Divider().padding(.leading, 56)
@@ -186,7 +183,7 @@ struct ContentView: View {
                         number: 3,
                         title: "Switch with the globe key",
                         description: "Use it anywhere you type. Full Access is not required.",
-                        isCompleted: keyboardEnabled
+                        isCompleted: false
                     )
                 }
             }
@@ -234,14 +231,6 @@ struct ContentView: View {
         UIApplication.shared.open(url)
     }
 
-    private func checkKeyboardEnabled() {
-        guard let keyboards = UserDefaults.standard.object(forKey: "AppleKeyboards") as? [String] else {
-            keyboardEnabled = false
-            return
-        }
-
-        keyboardEnabled = keyboards.contains { $0.contains(keyboardBundleIdentifier) }
-    }
 }
 
 struct Card<Content: View>: View {

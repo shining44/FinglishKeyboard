@@ -471,8 +471,10 @@ final class UserLexicon {
     static let shared = UserLexicon()
 
     private let defaults = UserDefaults.standard
-    private let suggestionChoicesKey = "FinglishKeyboard.UserLexicon.suggestionChoices.v1"
-    private let nextWordChoicesKey = "FinglishKeyboard.UserLexicon.nextWordChoices.v1"
+    // v2 intentionally leaves behind choices learned from the former lossy
+    // repeated-letter cleanup (for example ممنون -> منون).
+    private let suggestionChoicesKey = "FinglishKeyboard.UserLexicon.suggestionChoices.v2"
+    private let nextWordChoicesKey = "FinglishKeyboard.UserLexicon.nextWordChoices.v2"
     private let maxInputs = 500
     private let maxCandidatesPerInput = 12
     private let maxCandidateWeight = 40

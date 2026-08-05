@@ -6,6 +6,10 @@ struct KeyButton: View {
     let action: () -> Void
     var alternates: [String] = []
     var onAlternateSelected: ((String) -> Void)? = nil
+    var visualWidth: CGFloat? = nil
+    var visualHeight: CGFloat = 42
+    var visualCenterOffset: CGFloat = 0
+    var cellHeight: CGFloat = 42
 
     @Environment(\.colorScheme) var colorScheme
     @State private var isPressed = false
@@ -17,7 +21,10 @@ struct KeyButton: View {
 
     var body: some View {
         GeometryReader { geometry in
-            ZStack {
+            let centerX = geometry.size.width / 2 + visualCenterOffset
+            let centerY = geometry.size.height / 2
+
+            ZStack(alignment: .topLeading) {
                 ZStack {
                     RoundedRectangle(cornerRadius: 5)
                         .fill(keyColor)
@@ -27,6 +34,8 @@ struct KeyButton: View {
                         .font(.system(size: 22, weight: .light))
                         .foregroundColor(textColor)
                 }
+                .frame(width: visualWidth ?? geometry.size.width, height: visualHeight)
+                .position(x: centerX, y: centerY)
                 .scaleEffect(isPressed ? 0.92 : 1.0)
                 .brightness(isPressed ? 0.1 : 0)
                 .animation(.spring(response: 0.15, dampingFraction: 0.6), value: isPressed)
@@ -34,7 +43,10 @@ struct KeyButton: View {
                 // Key popup preview
                 if showPopup && !showAlternates {
                     KeyPopup(title: title, colorScheme: colorScheme)
-                        .offset(y: -55)
+                        .position(x: centerX, y: centerY)
+                        // Keep top-row previews inside the keyboard's primary
+                        // view; custom keyboards cannot draw above that boundary.
+                        .offset(y: -42)
                         .transition(.asymmetric(
                             insertion: .scale(scale: 0.5).combined(with: .opacity),
                             removal: .opacity
@@ -61,10 +73,12 @@ struct KeyButton: View {
                             selectedAlternate = nil
                         }
                     )
-                    .offset(y: -60)
+                    .position(x: centerX, y: centerY)
+                    .offset(y: -42)
                     .zIndex(200)
                 }
             }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
             .contentShape(Rectangle())
             .gesture(
                 DragGesture(minimumDistance: 0)
@@ -76,7 +90,8 @@ struct KeyButton: View {
                     }
             )
         }
-        .frame(height: 42)
+        .frame(height: cellHeight)
+        .zIndex(showPopup || showAlternates ? 200 : 0)
         .onDisappear {
             resetPressState()
         }
@@ -113,7 +128,7 @@ struct KeyButton: View {
             } else if isInsideKey(value.location, geometry: geometry) {
                 action()
             }
-        } else if !didTriggerLongPress {
+        } else if !didTriggerLongPress && isInsideKey(value.location, geometry: geometry) {
             action()
         }
 
@@ -163,7 +178,7 @@ struct KeyButton: View {
         let totalWidth = CGFloat(alternates.count) * itemWidth +
             CGFloat(max(alternates.count - 1, 0)) * spacing +
             horizontalPadding * 2
-        let contentLeft = geometry.size.width / 2 - totalWidth / 2 + horizontalPadding
+        let contentLeft = geometry.size.width / 2 + visualCenterOffset - totalWidth / 2 + horizontalPadding
         let relativeX = location.x - contentLeft
         let stride = itemWidth + spacing
         let index = Int(floor(relativeX / stride))

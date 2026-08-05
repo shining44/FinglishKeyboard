@@ -20,6 +20,8 @@ class FinglishDictionary {
 
     private var wordMap: [String: [String]] = [:]
     private var prefixMap: [String: [(String, [String])]] = [:]
+    private var deletionMap: [String: [String]] = [:]
+    private var maximumIndexedKeyLength = 0
     private var keyedFrequencyMap: [String: [String: Int]] = [:]
     private var frequencyMap: [String: Int] = [:]
     private var nextWordMap: [String: [(String, Int)]] = [:]  // For predictive text
@@ -41,6 +43,7 @@ class FinglishDictionary {
     private init() {
         buildDictionary()
         buildPrefixIndex()
+        buildDeletionIndex()
         buildNextWordPredictions()
     }
 
@@ -61,8 +64,13 @@ class FinglishDictionary {
         findCandidates(for: input, includeFuzzy: includeFuzzy).map { $0.value }
     }
 
+    func hasExactMatch(for input: String) -> Bool {
+        wordMap[normalizedKey(input)] != nil
+    }
+
     func findCandidates(for input: String, includeFuzzy: Bool = true, limit: Int = 8) -> [FinglishDictionaryCandidate] {
-        let lowercased = input.lowercased()
+        let lowercased = normalizedKey(input)
+        guard !lowercased.isEmpty, limit > 0 else { return [] }
         var candidates: [FinglishDictionaryCandidate] = []
 
         // Exact match - highest priority and scored by the specific Finglish key.
@@ -80,9 +88,11 @@ class FinglishDictionary {
 
         // Prefix matches from index. Short completions beat distant completions.
         let prefixKey = String(lowercased.prefix(2))
+        let isSingleWordInput = isReachableSingleWordKey(lowercased)
         if let prefixEntries = prefixMap[prefixKey] {
             for (key, values) in prefixEntries {
                 if key.hasPrefix(lowercased) && key != lowercased {
+                    guard !isSingleWordInput || isReachableSingleWordKey(key) else { continue }
                     guard !prefixExcludedKeys.contains(key) else { continue }
                     for word in values {
                         let freq = keyedFrequency(for: key, value: word)
@@ -101,20 +111,45 @@ class FinglishDictionary {
             }
         }
 
-        if includeFuzzy && candidates.count < 12 && lowercased.count >= 3 {
-            appendFuzzyCandidates(for: lowercased, into: &candidates)
+        if includeFuzzy && lowercased.count >= 3 {
+            // Substitution aliases are cheap exact lookups and should not be
+            // suppressed by a large prefix bucket.
             appendSubstitutionCandidates(for: lowercased, into: &candidates)
+
+            // Only pay for edit-distance matching when exact/prefix/substitution
+            // results do not already fill the suggestion bar. Count unique output
+            // values because repeated dictionary declarations are merged at load.
+            if Set(candidates.map { $0.value }).count < 12 {
+                appendFuzzyCandidates(for: lowercased, into: &candidates)
+            }
         }
 
         return ranked(candidates, limit: limit)
     }
 
     private func appendFuzzyCandidates(for input: String, into candidates: inout [FinglishDictionaryCandidate]) {
+        // No indexed word can be within edit distance two of a longer token.
+        // This also prevents a pasted hash or URL from making deletion-signature
+        // generation allocate quadratically inside the keyboard extension.
+        guard input.count <= maximumIndexedKeyLength + 2 else { return }
+
         let prefixKey = String(input.prefix(2))
+        var candidateKeys = Set(prefixMap[prefixKey]?.map { $0.0 } ?? [])
 
-        guard let prefixEntries = prefixMap[prefixKey] else { return }
+        // A one-deletion index recovers insertions, omissions, substitutions,
+        // and adjacent transpositions even when the typo is in the first two
+        // characters. This keeps fuzzy lookup bounded without scanning 3k+ keys.
+        candidateKeys.formUnion(deletionMap[input] ?? [])
+        for signature in deletionSignatures(for: input) {
+            if wordMap[signature] != nil {
+                candidateKeys.insert(signature)
+            }
+            candidateKeys.formUnion(deletionMap[signature] ?? [])
+        }
 
-        for (key, values) in prefixEntries {
+        for key in candidateKeys {
+            guard abs(key.count - input.count) <= 2,
+                  let values = wordMap[key] else { continue }
             let distance = levenshteinDistance(input, key)
             guard distance > 0 && distance <= 2 else { continue }
 
@@ -123,7 +158,11 @@ class FinglishDictionary {
                 candidates.append(FinglishDictionaryCandidate(
                     value: word,
                     matchedKey: key,
-                    score: 3_000 + freq * 5 - distance * 700,
+                    // Generic edit-distance recovery remains visible but below
+                    // plausible morphology, so an unlisted valid word is not
+                    // auto-committed as a different dictionary word. Explicit
+                    // Finglish conventions are scored separately below.
+                    score: 7_300 + freq * 5 - distance * 700,
                     source: .fuzzy
                 ))
             }
@@ -137,10 +176,17 @@ class FinglishDictionary {
             if let exactMatches = wordMap[key] {
                 for word in exactMatches {
                     let freq = keyedFrequency(for: key, value: word)
+                    let baseScore = isHighConfidenceTransliterationSubstitution(from: input, to: key)
+                        ? 8_200
+                        : 4_500
                     candidates.append(FinglishDictionaryCandidate(
                         value: word,
                         matchedKey: key,
-                        score: 4_500 + freq * 5,
+                        // x/kh and q/gh are established alternate Finglish
+                        // spellings, so their exact-key recovery should beat a
+                        // coincidental one-edit word. Broader s/z/c swaps stay
+                        // conservative because they often change meaning.
+                        score: baseScore + freq * 5,
                         source: .substitution
                     ))
                 }
@@ -181,23 +227,24 @@ class FinglishDictionary {
         if m == 0 { return n }
         if n == 0 { return m }
 
-        var matrix = [[Int]](repeating: [Int](repeating: 0, count: n + 1), count: m + 1)
-
-        for i in 0...m { matrix[i][0] = i }
-        for j in 0...n { matrix[0][j] = j }
-
+        // Keep only the previous and current rows. A keyboard extension has a
+        // tight memory budget, and this runs repeatedly while the user types.
+        var previousRow = Array(0...n)
         for i in 1...m {
+            var currentRow = [Int](repeating: 0, count: n + 1)
+            currentRow[0] = i
             for j in 1...n {
                 let cost = s1Array[i - 1] == s2Array[j - 1] ? 0 : 1
-                matrix[i][j] = min(
-                    matrix[i - 1][j] + 1,      // deletion
-                    matrix[i][j - 1] + 1,      // insertion
-                    matrix[i - 1][j - 1] + cost // substitution
+                currentRow[j] = min(
+                    previousRow[j] + 1,      // deletion
+                    currentRow[j - 1] + 1,   // insertion
+                    previousRow[j - 1] + cost // substitution
                 )
             }
+            previousRow = currentRow
         }
 
-        return matrix[m][n]
+        return previousRow[n]
     }
 
     // Common letter substitutions in Finglish
@@ -225,8 +272,27 @@ class FinglishDictionary {
         return results
     }
 
+    private func isHighConfidenceTransliterationSubstitution(from input: String, to key: String) -> Bool {
+        let conventions = [
+            ("x", "kh"), ("kh", "x"),
+            ("q", "gh"), ("gh", "q"),
+        ]
+
+        return conventions.contains { convention in
+            let (from, replacement) = convention
+            return input.contains(from)
+                && input.replacingOccurrences(of: from, with: replacement) == key
+        }
+    }
+
     private func keyedFrequency(for key: String, value: String) -> Int {
         keyedFrequencyMap[key]?[value] ?? frequencyMap[value] ?? 50
+    }
+
+    private func normalizedKey(_ input: String) -> String {
+        input
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func buildPrefixIndex() {
@@ -238,6 +304,37 @@ class FinglishDictionary {
                 }
                 prefixMap[prefix]?.append((key, values))
             }
+        }
+    }
+
+    private func buildDeletionIndex() {
+        for key in wordMap.keys where isReachableSingleWordKey(key) && key.count >= 3 {
+            maximumIndexedKeyLength = max(maximumIndexedKeyLength, key.count)
+            for signature in deletionSignatures(for: key) {
+                deletionMap[signature, default: []].append(key)
+            }
+        }
+    }
+
+    private func deletionSignatures(for value: String) -> Set<String> {
+        let characters = Array(value)
+        guard characters.count > 1 else { return [] }
+
+        var signatures = Set<String>()
+        signatures.reserveCapacity(characters.count)
+        for index in characters.indices {
+            var reduced = characters
+            reduced.remove(at: index)
+            signatures.insert(String(reduced))
+        }
+        return signatures
+    }
+
+    private func isReachableSingleWordKey(_ key: String) -> Bool {
+        key.unicodeScalars.allSatisfy { scalar in
+            let value = scalar.value
+            return (value >= 48 && value <= 57) ||
+                (value >= 97 && value <= 122)
         }
     }
 
@@ -1633,7 +1730,7 @@ class FinglishDictionary {
             ("bale dige", ["بله دیگه"], 85),
             ("are dige", ["آره دیگه"], 88),
             ("nemidoonam", ["نمی‌دونم"], 93),
-            ("nemidonam", ["نمیدونم"], 95),
+            ("nemidonam", ["نمی‌دونم"], 95),
             ("chi begam", ["چی بگم"], 88),
             ("faghat hamin", ["فقط همین"], 85),
             ("khoob bash", ["خوب باش"], 85),
@@ -5146,6 +5243,74 @@ class FinglishDictionary {
             ("mitoonm", ["می‌تونم"], 95),
             ("nmitunm", ["نمی‌تونم"], 96),
             ("nmitoonm", ["نمی‌تونم"], 96),
+
+            // Spoken object marker and pronoun forms used constantly in chat
+            ("manam", ["منم"], 98),
+            ("toam", ["توام"], 94),
+            ("oonam", ["اونم"], 96),
+            ("ino", ["اینو"], 100),
+            ("inro", ["این رو"], 92),
+            ("uno", ["اونو"], 98),
+            ("oono", ["اونو"], 100),
+            ("oonro", ["اون رو"], 92),
+            ("mano", ["منو"], 98),
+            ("toro", ["تو رو"], 98),
+            ("maro", ["ما رو"], 94),
+            ("shomaro", ["شما رو"], 94),
+            ("inaro", ["اینا رو"], 94),
+            ("unaro", ["اونا رو"], 94),
+            ("oonaro", ["اونا رو"], 96),
+            ("hamino", ["همینو"], 98),
+            ("hamoono", ["همونو"], 96),
+
+            // Everyday connectors and colloquial spellings
+            ("vase", ["واسه"], 98),
+            ("vaseye", ["واسه‌ی"], 94),
+            ("mesle", ["مثل"], 98),
+            ("engar", ["انگار"], 96),
+            ("aghe", ["اگه"], 98),
+            ("mage", ["مگه"], 98),
+            ("akhe", ["آخه"], 98),
+            ("yeh", ["یه"], 98),
+            ("felan", ["فعلاً"], 98),
+            ("felan", ["فلان"], 78),
+            ("hattaa", ["حتی"], 92),
+            ("chizayi", ["چیزایی"], 92),
+            ("chghadr", ["چقدر"], 94),
+            ("khob", ["خب"], 100),
+            ("khob", ["خوب"], 88),
+            ("khoobim", ["خوبیم"], 94),
+            ("dost", ["دوست"], 96),
+            ("goshne", ["گشنه"], 94),
+            ("tashne", ["تشنه"], 94),
+            ("eshgh", ["عشق"], 98),
+            ("yad", ["یاد"], 98),
+            ("dard", ["درد"], 96),
+            ("halam", ["حالم"], 98),
+            ("halm", ["حالم"], 92),
+            ("koni", ["کنی"], 96),
+            ("shode", ["شده"], 98),
+            ("nabashi", ["نباشی"], 94),
+            ("nakone", ["نکنه"], 94),
+            ("sabr", ["صبر"], 94),
+            ("khabar", ["خبر"], 98),
+            ("tang", ["تنگ"], 92),
+            ("ghabel", ["قابل"], 96),
+            ("bayad", ["باید"], 100),
+            ("ast", ["است"], 100),
+            ("tars", ["ترس"], 94),
+
+            // Productive forms whose casual spellings were missing
+            ("mikhaay", ["می‌خوای"], 96),
+            ("mikhayd", ["می‌خواید"], 90),
+            ("berin", ["برین"], 96),
+            ("biam", ["بیام"], 98),
+            ("biay", ["بیای"], 96),
+            ("biai", ["بیای"], 94),
+            ("biad", ["بیاد"], 98),
+            ("miyay", ["میای"], 98),
+            ("miyai", ["میای"], 96),
+            ("bokonin", ["بکنین"], 90),
         ])
 
         // ===========================================
@@ -5182,21 +5347,21 @@ class FinglishDictionary {
             ("khfn", ["خفن"], 88),
             ("kfan", ["خفن"], 85),
             ("khfan", ["خفن"], 90),
-            ("mikahm", ["میخوام"], 90),
-            ("mikhm", ["میخوام"], 88),
-            ("mikam", ["میخوام"], 85),
-            ("nemikahm", ["نمیخوام"], 88),
-            ("nmikhm", ["نمیخوام"], 85),
-            ("midnam", ["میدونم"], 90),
-            ("midunm", ["میدونم"], 88),
-            ("midnm", ["میدونم"], 85),
-            ("nemidnam", ["نمیدونم"], 88),
-            ("nmidunm", ["نمیدونم"], 85),
-            ("mtnm", ["میتونم"], 85),
-            ("mitunm", ["میتونم"], 90),
-            ("mitnam", ["میتونم"], 88),
-            ("nmitunm", ["نمیتونم"], 85),
-            ("nemitunm", ["نمیتونم"], 88),
+            ("mikahm", ["می‌خوام"], 90),
+            ("mikhm", ["می‌خوام"], 88),
+            ("mikam", ["می‌خوام"], 85),
+            ("nemikahm", ["نمی‌خوام"], 88),
+            ("nmikhm", ["نمی‌خوام"], 85),
+            ("midnam", ["می‌دونم"], 90),
+            ("midunm", ["می‌دونم"], 88),
+            ("midnm", ["می‌دونم"], 85),
+            ("nemidnam", ["نمی‌دونم"], 88),
+            ("nmidunm", ["نمی‌دونم"], 85),
+            ("mtnm", ["می‌تونم"], 85),
+            ("mitunm", ["می‌تونم"], 90),
+            ("mitnam", ["می‌تونم"], 88),
+            ("nmitunm", ["نمی‌تونم"], 85),
+            ("nemitunm", ["نمی‌تونم"], 88),
             ("asan", ["آسان"], 90),
             ("aasan", ["آسان"], 92),
             ("sakht", ["سخت"], 95),
@@ -5231,30 +5396,34 @@ class FinglishDictionary {
 
     private func addWords(_ words: [(String, [String], Int)]) {
         for (key, values, frequency) in words {
-            if wordMap[key] != nil {
-                wordMap[key]?.append(contentsOf: values)
-            } else {
-                wordMap[key] = values
-            }
-            for value in values {
-                keyedFrequencyMap[key, default: [:]][value] = max(keyedFrequencyMap[key]?[value] ?? 0, frequency)
-                frequencyMap[value] = max(frequencyMap[value] ?? 0, frequency)
-            }
+            mergeWords(key: key, values: values, frequency: frequency)
         }
     }
 
     private func addWords(_ words: [(String, [String])]) {
         for (key, values) in words {
-            if wordMap[key] != nil {
-                wordMap[key]?.append(contentsOf: values)
-            } else {
-                wordMap[key] = values
-            }
-            for value in values {
-                keyedFrequencyMap[key, default: [:]][value] = max(keyedFrequencyMap[key]?[value] ?? 0, 50)
-                frequencyMap[value] = max(frequencyMap[value] ?? 0, 50)
-            }
+            mergeWords(key: key, values: values, frequency: 50)
         }
+    }
+
+    private func mergeWords(key: String, values: [String], frequency: Int) {
+        let normalized = normalizedKey(key)
+        guard !normalized.isEmpty else { return }
+
+        var existingValues = wordMap[normalized] ?? []
+        var seenValues = Set(existingValues)
+        for value in values where !value.isEmpty {
+            if seenValues.insert(value).inserted {
+                existingValues.append(value)
+            }
+            keyedFrequencyMap[normalized, default: [:]][value] = max(
+                keyedFrequencyMap[normalized]?[value] ?? 0,
+                frequency
+            )
+            frequencyMap[value] = max(frequencyMap[value] ?? 0, frequency)
+        }
+
+        wordMap[normalized] = existingValues
     }
 
     private func buildNextWordPredictions() {
@@ -5537,11 +5706,16 @@ class FinglishDictionary {
             ("بریم", "یه", 85),
         ]
 
-        for (prev, next, freq) in wordPairs {
-            if nextWordMap[prev] == nil {
-                nextWordMap[prev] = []
-            }
-            nextWordMap[prev]?.append((next, freq))
+        var mergedPairs: [String: [String: Int]] = [:]
+        for (previous, next, frequency) in wordPairs {
+            mergedPairs[previous, default: [:]][next] = max(
+                mergedPairs[previous]?[next] ?? 0,
+                frequency
+            )
+        }
+
+        for (previous, predictions) in mergedPairs {
+            nextWordMap[previous] = predictions.map { ($0.key, $0.value) }
         }
     }
 }
