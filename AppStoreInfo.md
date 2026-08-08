@@ -2,13 +2,19 @@
 
 ## App Information
 
-**App Name:** Finglish Keyboard - Farsi Typing
+**App Name:** Finglish Keyboard: Farsi
 
 **Subtitle:** Type Finglish, Get Persian
 
 **Category:** Utilities
 
 **Secondary Category:** Productivity
+
+**Copyright:** © 2026 Ali Tayyebi
+
+**Privacy Policy URL:** https://github.com/shining44/FinglishKeyboard/blob/main/PRIVACY.md
+
+**Support URL:** https://github.com/shining44/FinglishKeyboard/blob/main/SUPPORT.md
 
 ---
 
@@ -30,35 +36,28 @@ Finglish Keyboard makes typing in Persian feel natural. Type the way many Persia
 
 Perfect for messaging, social media, email, notes, and anywhere you need Persian text but prefer starting from a Latin keyboard.
 
-No data is collected. Your typing stays on your device.
+Your typing stays on your device. No typing data is sent to us.
 
 ---
 
 ## Keywords
 
-finglish, farsi, persian, keyboard, typing, iran, iranian, transliteration, pinglish, فارسی, کیبورد
+iranian,typing,transliteration,pinglish,فارسی,کیبورد,romanization,tehran
 
 ---
 
-## Privacy Policy URL
+## App Privacy
 
-You need to host a privacy policy. Here's the text:
+Select **No, we do not collect data from this app** in App Store Connect.
 
-### Privacy Policy for Finglish Keyboard
+The keyboard processes text locally and does not transmit it. It keeps bounded,
+on-device suggestion and next-word choice weights in the keyboard extension's
+local storage so suggestions can improve. This local personalization is not
+sent to the developer or a third party. See [PRIVACY.md](PRIVACY.md) for the
+complete policy.
 
-**Last updated: May 2026**
-
-Finglish Keyboard is designed with your privacy in mind.
-
-**Data Collection:** We do not collect, store, or transmit any personal data. All text processing happens locally on your device.
-
-**Keyboard Access:** The keyboard extension does not request Full Access. This means it cannot access the network or send any data anywhere.
-
-**Analytics:** We do not use any analytics or tracking services.
-
-**Third Parties:** We do not share any data with third parties because we do not collect any data.
-
-**Contact:** For questions about this privacy policy, use the developer support contact listed for Finglish Keyboard in the App Store.
+The public policy and support pages must be available at the URLs above before
+submitting the app for review.
 
 ---
 
@@ -82,9 +81,13 @@ Initial release featuring:
 
 ## Screenshots Needed
 
-You'll need screenshots for:
-- 6.7" Display (iPhone 15 Pro Max) - Required
-- 5.5" Display (iPhone 8 Plus) - Required
+Because the app targets both iPhone and iPad, provide:
+
+- 6.9" iPhone display — required; use an accepted 6.9" size such as 1320 × 2868 pixels in portrait
+- 13" iPad display — required; use 2064 × 2752 or 2048 × 2732 pixels in portrait
+
+App Store Connect can scale these highest-resolution sets for smaller supported
+displays. Screenshots must not contain transparency.
 
 Suggested screenshots:
 1. Main app welcome screen
@@ -97,5 +100,4 @@ Suggested screenshots:
 
 ## App Icon
 
-You need a 1024x1024 PNG app icon without transparency.
-Suggested design: Purple/blue gradient with "ف" in white.
+The asset catalog includes a 1024 × 1024 PNG app icon without transparency.

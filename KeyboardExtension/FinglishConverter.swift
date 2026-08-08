@@ -759,17 +759,23 @@ class FinglishConverter {
         // dictionary key. Several valid conversational words are one edit away
         // from another word (mah/ma, yeki/yek, mikhan/mikham, chetore/chetor).
         // Exact user intent must win over a broad correction rule.
-        let corrected = dictionary.hasExactMatch(for: lowercased)
+        let hasExactDictionaryMatch = dictionary.hasExactMatch(for: lowercased)
+        let corrected = hasExactDictionaryMatch
             ? lowercased
             : (typoCorrections[lowercased] ?? lowercased)
 
         // 2. Check for direct colloquial match first (highest priority for common verbs)
-        if let colloquialMatch = tryColloquialMatch(corrected) {
+        // Exact dictionary spellings stay authoritative. This prevents broad
+        // colloquial transforms (for example khane -> khune) from changing an
+        // explicitly curated exact entry before automatic space/return commit.
+        if !hasExactDictionaryMatch, let colloquialMatch = tryColloquialMatch(corrected) {
             addCandidate(colloquialMatch, score: 12_000, preservesCuratedSpelling: true)
         }
 
         // 3. Handle object clitics before dictionary fallbacks.
-        if let objectCliticMatch = tryObjectCliticMatch(corrected) {
+        // Likewise, do not reinterpret an exact noun ending in -em/-et/-esh as
+        // a generated verb + object clitic (moalem must not become معلمم).
+        if !hasExactDictionaryMatch, let objectCliticMatch = tryObjectCliticMatch(corrected) {
             addCandidate(objectCliticMatch, score: 11_800)
         }
 
