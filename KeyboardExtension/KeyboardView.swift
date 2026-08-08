@@ -73,6 +73,10 @@ struct KeyboardView: View {
             .padding(.horizontal, 3)
             .padding(.vertical, 6)
             .padding(.bottom, 2)
+            // Keep the Latin QWERTY surface stable even when the host app or
+            // keyboard language uses RTL layout. The Persian suggestion bar
+            // remains outside this subtree and continues to follow RTL.
+            .environment(\.layoutDirection, .leftToRight)
         }
         .background(keyboardBackground)
     }

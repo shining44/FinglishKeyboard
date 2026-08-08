@@ -5,6 +5,8 @@ struct ContentView: View {
     @State private var demoSuggestions: [String] = []
 
     private let converter = DemoConverter()
+    private let privacyPolicyURL = URL(string: "https://github.com/shining44/FinglishKeyboard/blob/main/PRIVACY.md")!
+    private let supportURL = URL(string: "https://github.com/shining44/FinglishKeyboard/blob/main/SUPPORT.md")!
     private let exampleWords = [
         ExampleWord(finglish: "salam", farsi: "سلام"),
         ExampleWord(finglish: "mersi", farsi: "مرسی"),
@@ -28,6 +30,7 @@ struct ContentView: View {
                     setupStepsSection
                     featuresSection
                     tipsSection
+                    legalSection
                 }
                 .padding(.horizontal, 18)
                 .padding(.vertical, 20)
@@ -217,6 +220,32 @@ struct ContentView: View {
                     Divider().padding(.leading, 40)
                     TipRow(tip: "Double-tap space for period and space.", icon: "circle.fill")
                 }
+            }
+        }
+    }
+
+    private var legalSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeader(
+                title: "Privacy & Support",
+                subtitle: "Read how on-device personalization works or get help with the keyboard."
+            )
+
+            Card {
+                VStack(alignment: .leading, spacing: 14) {
+                    Link(destination: privacyPolicyURL) {
+                        Label("Privacy Policy", systemImage: "hand.raised.fill")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
+                    Divider()
+
+                    Link(destination: supportURL) {
+                        Label("Support", systemImage: "questionmark.circle.fill")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .font(.subheadline.weight(.semibold))
             }
         }
     }
