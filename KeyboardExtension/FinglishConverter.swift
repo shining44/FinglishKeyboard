@@ -1429,9 +1429,10 @@ class FinglishConverter {
         // generating unknown words. Strip only those generated placeholders;
         // curated dictionary candidates bypass this function so their Persian
         // spelling, repeated letters, hamza, tanvin, and ZWNJ stay lossless.
-        input
+        let stripped = input
             .replacingOccurrences(of: "ِ", with: "")
             .replacingOccurrences(of: "ُ", with: "")
+        return PersianOrthography.canonicalize(stripped)
     }
 
     // Check if a word should have ZWNJ
