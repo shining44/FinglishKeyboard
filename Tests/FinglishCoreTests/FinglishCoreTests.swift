@@ -242,11 +242,17 @@ final class FinglishCoreTests: XCTestCase {
             "ketabha": "کتاب‌ها",
             "ketabhaye": "کتاب‌های",
             "ketabhayi": "کتاب‌هایی",
+            "ketabhayam": "کتاب‌هایم",
             "khaneha": "خانه‌ها",
+            "golha": "گل‌ها",
             "khaneam": "خانه‌ام",
             "khaneash": "خانه‌اش",
             "rafteam": "رفته‌ام",
+            "rafteim": "رفته‌ایم",
+            "dideam": "دیده‌ام",
             "didei": "دیده‌ای",
+            "zibatar": "زیباتر",
+            "rahattar": "راحت‌تر",
             "bozorgtar": "بزرگ‌تر",
             "bozorgtarin": "بزرگ‌ترین",
             "narmafzar": "نرم‌افزار",
@@ -285,7 +291,156 @@ final class FinglishCoreTests: XCTestCase {
             "zalim": "ظالم",
             "zaleem": "ظالم",
             "zaalm": "ظالم",
+            "astaghfr": "استغفرالله",
+            "astaghfor": "استغفرالله",
+            "kji": "کجایی",
+            "kojii": "کجایی",
+            "jonm": "جونم",
+            "yarb": "یا رب",
+            "yarab": "یا رب",
+            "yaraab": "یا رب",
+            "jazak": "جزاک‌الله",
+            "jazakalla": "جزاک‌الله",
+            "kiaa": "کیا",
+            "inhaa": "این‌ها",
+            "aha": "آها",
+            "ahaa": "آها",
+            "tangt": "تنگت",
+            "tengit": "تنگیت",
         ])
+    }
+
+    func testMalformedStemAndPersonFormsAreCorrected() {
+        assertTopSuggestions([
+            "poshtam": "پشتم",
+            "poshti": "پشتی",
+            "neshundad": "نشون داد",
+            "neshundadam": "نشون دادم",
+            "kesid": "کشید",
+            "kesidam": "کشیدم",
+            "biayin": "بیاین",
+            "mishinan": "می‌شینن",
+            "miyayand": "می‌آیند",
+            "mikhahi": "می‌خواهی",
+            "mikhahad": "می‌خواهد",
+            "midanad": "می‌داند",
+            "mitavanad": "می‌تواند",
+            "nemikhahad": "نمی‌خواهد",
+            "nemidanad": "نمی‌داند",
+            "nemitavanad": "نمی‌تواند",
+            "khasteam": "خسته‌ام",
+        ])
+
+        XCTAssertFalse(FinglishDictionary.shared.hasExactMatch(for: "nishinan"))
+    }
+
+    func testAdditionalCanonicalHamzaAliases() {
+        assertTopSuggestions([
+            "taakid": "تأکید",
+            "takid": "تأکید",
+            "taalif": "تألیف",
+            "talif": "تألیف",
+            "taammol": "تأمل",
+            "taasof": "تأسف",
+            "moteasser": "متأثر",
+            "moteakher": "متأخر",
+            "moallef": "مؤلف",
+            "moaddab": "مؤدب",
+            "roasa": "رؤسا",
+            "shooun": "شئون",
+            "jorat": "جرئت",
+            "mamoor": "مأمور",
+            "mamur": "مأمور",
+            "mayoos": "مأیوس",
+            "mayus": "مأیوس",
+            "maakhaz": "مأخذ",
+            "makhaz": "مأخذ",
+            "moakhaze": "مؤاخذه",
+        ])
+
+        let migrations = [
+            "تاکید": "تأکید",
+            "تالیف": "تألیف",
+            "تامل": "تأمل",
+            "تاسف": "تأسف",
+            "متاثر": "متأثر",
+            "متاخر": "متأخر",
+            "مولف": "مؤلف",
+            "مودب": "مؤدب",
+            "روسا": "رؤسا",
+            "جرات": "جرئت",
+            "مامور": "مأمور",
+            "مایوس": "مأیوس",
+            "ماخذ": "مأخذ",
+            "مواخذه": "مؤاخذه",
+        ]
+
+        for (legacy, canonical) in migrations {
+            XCTAssertEqual(PersianOrthography.canonicalize(legacy), canonical, legacy)
+        }
+    }
+
+    func testHighConfidenceLexicalFallbackGapsAreExactWords() {
+        assertTopSuggestions([
+            "daghigh": "دقیق",
+            "daghighan": "دقیقاً",
+            "kamelan": "کاملاً",
+            "rasman": "رسماً",
+            "shey": "شیء",
+            "qoran": "قرآن",
+            "etelaat": "اطلاعات",
+            "ertebat": "ارتباط",
+            "entezar": "انتظار",
+            "elm": "علم",
+            "omr": "عمر",
+            "zarf": "ظرف",
+            "mosbat": "مثبت",
+            "ensaf": "انصاف",
+            "ensan": "انسان",
+            "emkan": "امکان",
+            "emza": "امضا",
+            "ehtiyat": "احتیاط",
+            "estelah": "اصطلاح",
+            "dalil": "دلیل",
+            "nazar": "نظر",
+            "darkhast": "درخواست",
+            "vaziyat": "وضعیت",
+            "sharayet": "شرایط",
+            "ahamiyat": "اهمیت",
+            "mozu": "موضوع",
+            "mozoo": "موضوع",
+            "ayande": "آینده",
+        ])
+    }
+
+    func testAmbiguousLatinKeysKeepTheirIntendedLexicalFamilies() {
+        assertTopSuggestions([
+            "sher": "شعر",
+            "shir": "شیر",
+            "shar": "شر",
+            "abi": "آبی",
+            "abji": "آبجی",
+            "unja": "اونجا",
+            "anja": "آنجا",
+            "hichchi": "هیچ‌چی",
+            "hichi": "هیچی",
+            "egg": "تخم‌مرغ",
+        ])
+
+        let forbidden: [String: Set<String>] = [
+            "abi": ["آبجی"],
+            "unja": ["آنجا"],
+            "hichchi": ["هیچی"],
+            "sher": ["شیر", "شر"],
+            "egg": ["تخم مرغ"],
+        ]
+
+        for (input, removed) in forbidden {
+            XCTAssertTrue(
+                Set(converter.getSuggestions(for: input)).isDisjoint(with: removed),
+                input
+            )
+        }
     }
 
     func testExactDictionaryWordsDoNotLeakGeneratedAlternatives() {
