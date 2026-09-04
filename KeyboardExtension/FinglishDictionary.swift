@@ -1,5 +1,85 @@
 import Foundation
 
+enum PersianOrthography {
+    private static let exactReplacements: [String: String] = [
+        // Hamza-bearing words and common adverbs.
+        "متاسف": "متأسف",
+        "متاسفم": "متأسفم",
+        "متاسفانه": "متأسفانه",
+        "سوال": "سؤال",
+        "حتما": "حتماً",
+        "واقعا": "واقعاً",
+        "احتمالا": "احتمالاً",
+        "اتفاقا": "اتفاقاً",
+        "مثلا": "مثلاً",
+        "اصلا": "اصلاً",
+
+        // Stable compounds and religious expressions.
+        "هیچوقت": "هیچ‌وقت",
+        "آبمیوه": "آب‌میوه",
+        "وبسایت": "وب‌سایت",
+        "انشاالله": "ان‌شاءالله",
+        "انشالله": "ان‌شاءالله",
+        "ماشالله": "ماشاءالله",
+        "ماشاالله": "ماشاءالله",
+
+        // High-frequency colloquial شدن forms use the verbal prefix boundary.
+        "میشم": "می‌شم",
+        "میشی": "می‌شی",
+        "میشه": "می‌شه",
+        "میشیم": "می‌شیم",
+        "میشین": "می‌شین",
+        "میشن": "می‌شن",
+        "نمیشم": "نمی‌شم",
+        "نمیشی": "نمی‌شی",
+        "نمیشه": "نمی‌شه",
+
+        // Colloquial آمدن is written without a fabricated long alef.
+        "می‌آم": "میام",
+        "می‌آد": "میاد",
+        "می‌آی": "میای",
+    ]
+
+    static func canonicalize(_ value: String) -> String {
+        let normalizedLetters = value
+            .replacingOccurrences(of: "ي", with: "ی")
+            .replacingOccurrences(of: "ى", with: "ی")
+            .replacingOccurrences(of: "ك", with: "ک")
+            .precomposedStringWithCanonicalMapping
+
+        return exactReplacements[normalizedLetters] ?? normalizedLetters
+    }
+
+    static func skeleton(_ value: String) -> String {
+        let decomposed = canonicalize(value).decomposedStringWithCanonicalMapping
+        let scalars = decomposed.unicodeScalars.filter { scalar in
+            scalar.value != 0x200C && !CharacterSet.nonBaseCharacters.contains(scalar)
+        }
+        return String(String.UnicodeScalarView(scalars))
+    }
+
+    static func prefers(_ candidate: String, over existing: String) -> Bool {
+        let candidateScore = orthographicRichness(of: canonicalize(candidate))
+        let existingScore = orthographicRichness(of: canonicalize(existing))
+        return candidateScore > existingScore
+    }
+
+    private static func orthographicRichness(of value: String) -> Int {
+        value.unicodeScalars.reduce(into: 0) { score, scalar in
+            switch scalar.value {
+            case 0x200C: // ZWNJ
+                score += 4
+            case 0x0621, 0x0622, 0x0623, 0x0624, 0x0626, 0x0654: // hamza/madda forms
+                score += 3
+            case 0x064B...0x065F: // Arabic combining marks, including tanvin
+                score += 2
+            default:
+                break
+            }
+        }
+    }
+}
+
 struct FinglishDictionaryCandidate {
     let value: String
     let matchedKey: String
@@ -66,6 +146,41 @@ class FinglishDictionary {
 
     func hasExactMatch(for input: String) -> Bool {
         wordMap[normalizedKey(input)] != nil
+    }
+
+    func orthographicInvariantViolations() -> [String] {
+        let forbiddenScalars: Set<UInt32> = [
+            0x0640, // tatweel
+            0x0643, // Arabic kaf
+            0x0649, // alef maksura
+            0x064A, // Arabic yeh
+            0x06C0, // deprecated heh-with-yeh form
+        ]
+        var violations: [String] = []
+
+        for key in wordMap.keys.sorted() {
+            guard let values = wordMap[key] else { continue }
+            var seenSkeletons = Set<String>()
+
+            for value in values {
+                if value != PersianOrthography.canonicalize(value) {
+                    violations.append("\(key): noncanonical value \(value)")
+                }
+                if value != value.precomposedStringWithCanonicalMapping {
+                    violations.append("\(key): non-NFC value \(value)")
+                }
+                if value.unicodeScalars.contains(where: { forbiddenScalars.contains($0.value) }) {
+                    violations.append("\(key): forbidden Unicode scalar in \(value)")
+                }
+
+                let skeleton = PersianOrthography.skeleton(value)
+                if !seenSkeletons.insert(skeleton).inserted {
+                    violations.append("\(key): duplicate orthographic form \(value)")
+                }
+            }
+        }
+
+        return violations
     }
 
     func findCandidates(for input: String, includeFuzzy: Bool = true, limit: Int = 8) -> [FinglishDictionaryCandidate] {
@@ -701,10 +816,10 @@ class FinglishDictionary {
 
             // To love - dost dashtan
             ("dust daram", ["دوست دارم"], 95),
-            ("dooset daram", ["دوست دارم"], 95),
+            ("dooset daram", ["دوستت دارم"], 95),
             ("dust dari", ["دوست داری"], 93),
             ("dust dare", ["دوست داره"], 93),
-            ("duset daram", ["دوست دارم"], 92),
+            ("duset daram", ["دوستت دارم"], 92),
             ("asheghetam", ["عاشقتم"], 90),
 
             // To understand - fahmidan
@@ -2219,7 +2334,7 @@ class FinglishDictionary {
             ("raft", ["رفت"], 98),
             ("raftim", ["رفتیم"], 90),
             ("raftid", ["رفتید"], 88),
-            ("raftan", ["رفتند"], 85),
+            ("raftan", ["رفتن"], 85),
             ("beram", ["برم"], 95),
             ("beri", ["بری"], 92),
             ("bere", ["بره"], 95),
@@ -2230,10 +2345,10 @@ class FinglishDictionary {
             // To come (amadan)
             ("miam", ["می‌آم"], 98),
             ("miyam", ["می‌آم"], 98),
-            ("miyai", ["می‌آی"], 95),
+            ("miyai", ["میای"], 95),
             ("miyad", ["می‌آد"], 98),
-            ("miyaim", ["می‌آیم"], 92),
-            ("miyaid", ["می‌آید"], 90),
+            ("miyaim", ["می‌آییم"], 92),
+            ("miyaid", ["می‌آیید"], 90),
             ("miyan", ["می‌آن"], 88),
             ("oomadam", ["اومدم"], 95),
             ("umadam", ["اومدم"], 95),
@@ -2241,7 +2356,7 @@ class FinglishDictionary {
             ("oomad", ["اومد"], 95),
             ("oomadim", ["اومدیم"], 88),
             ("oomadid", ["اومدید"], 85),
-            ("oomadan", ["اومدند"], 82),
+            ("oomadan", ["اومدن"], 82),
             ("biyam", ["بیام"], 92),
             ("biyai", ["بیای"], 90),
             ("biyad", ["بیاد"], 92),
@@ -2296,7 +2411,7 @@ class FinglishDictionary {
             ("khast", ["خواست"], 92),
             ("khastim", ["خواستیم"], 85),
             ("khastid", ["خواستید"], 82),
-            ("khastan", ["خواستند"], 80),
+            ("khastan", ["خواستن"], 80),
             ("bekham", ["بخوام"], 90),
             ("bekhay", ["بخوای"], 88),
             ("bekhad", ["بخواد"], 90),
@@ -2322,7 +2437,7 @@ class FinglishDictionary {
             ("donest", ["دونست"], 88),
             ("donestim", ["دونستیم"], 80),
             ("donestid", ["دونستید"], 78),
-            ("donestan", ["دونستند"], 75),
+            ("donestan", ["دونستن"], 75),
             ("bedoonam", ["بدونم"], 90),
             ("bedooni", ["بدونی"], 88),
             ("bedoone", ["بدونه"], 90),
@@ -2342,7 +2457,7 @@ class FinglishDictionary {
             ("did", ["دید"], 95),
             ("didim", ["دیدیم"], 88),
             ("didid", ["دیدید"], 85),
-            ("didan", ["دیدند"], 82),
+            ("didan", ["دیدن"], 82),
             ("bebinam", ["ببینم"], 92),
             ("bebini", ["ببینی"], 90),
             ("bebine", ["ببینه"], 92),
@@ -2369,7 +2484,7 @@ class FinglishDictionary {
             ("goft", ["گفت"], 98),
             ("goftim", ["گفتیم"], 88),
             ("goftid", ["گفتید"], 85),
-            ("goftan", ["گفتند"], 82),
+            ("goftan", ["گفتن"], 82),
             ("begam", ["بگم"], 92),
             ("begi", ["بگی"], 90),
             ("bege", ["بگه"], 92),
@@ -2391,7 +2506,7 @@ class FinglishDictionary {
             ("khord", ["خورد"], 92),
             ("khordim", ["خوردیم"], 85),
             ("khordid", ["خوردید"], 82),
-            ("khordan", ["خوردند"], 80),
+            ("khordan", ["خوردن"], 80),
             ("bokhoram", ["بخورم"], 88),
             ("bokhori", ["بخوری"], 85),
             ("bokhore", ["بخوره"], 88),
@@ -2412,7 +2527,7 @@ class FinglishDictionary {
             ("dad", ["داد"], 92),
             ("dadim", ["دادیم"], 85),
             ("dadid", ["دادید"], 82),
-            ("dadan", ["دادند"], 80),
+            ("dadan", ["دادن"], 80),
             ("bedam", ["بدم"], 88),
             ("bedi", ["بدی"], 85),
             ("bede", ["بده"], 88),
@@ -2433,7 +2548,7 @@ class FinglishDictionary {
             ("gereft", ["گرفت"], 92),
             ("gereftim", ["گرفتیم"], 85),
             ("gereftid", ["گرفتید"], 82),
-            ("gereftan", ["گرفتند"], 80),
+            ("gereftan", ["گرفتن"], 80),
             ("begiram", ["بگیرم"], 88),
             ("begiri", ["بگیری"], 85),
             ("begire", ["بگیره"], 88),
@@ -2460,7 +2575,7 @@ class FinglishDictionary {
             ("toonest", ["تونست"], 90),
             ("toonestim", ["تونستیم"], 82),
             ("toonestid", ["تونستید"], 80),
-            ("toonestan", ["تونستند"], 78),
+            ("toonestan", ["تونستن"], 78),
             ("betoonam", ["بتونم"], 90),
             ("betooni", ["بتونی"], 88),
             ("betoone", ["بتونه"], 90),
@@ -2906,13 +3021,13 @@ class FinglishDictionary {
         // COMMON PHRASES & EXPRESSIONS
         // ===========================================
         addWords([
-            ("doset daram", ["دوست دارم"], 100),
-            ("dooset daram", ["دوست دارم"], 98),
+            ("doset daram", ["دوستت دارم"], 100),
+            ("dooset daram", ["دوستت دارم"], 98),
             ("asheghetam", ["عاشقتم"], 95),
             ("asheqetam", ["عاشقتم"], 95),
             ("delam tang shode", ["دلم تنگ شده"], 90),
             ("delam barat tang shode", ["دلم برات تنگ شده"], 88),
-            ("kheyli doset daram", ["خیلی دوست دارم"], 95),
+            ("kheyli doset daram", ["خیلی دوستت دارم"], 95),
             ("tavalod mobarak", ["تولد مبارک"], 95),
             ("tavalodet mobarak", ["تولدت مبارک"], 93),
             ("eid mobarak", ["عید مبارک"], 95),
@@ -3651,8 +3766,8 @@ class FinglishDictionary {
             ("jan", ["جان"], 93),
             ("asheghetam", ["عاشقتم"], 92),
             ("ashegham", ["عاشقم"], 95),
-            ("love you", ["دوست دارم"], 88),
-            ("doset daram", ["دوست دارم"], 95),
+            ("love you", ["دوستت دارم"], 88),
+            ("doset daram", ["دوستت دارم"], 95),
             ("doost daram", ["دوست دارم"], 93),
             ("miss you", ["دلم تنگ شده"], 85),
             ("deltang", ["دلتنگ"], 92),
@@ -4421,10 +4536,128 @@ class FinglishDictionary {
             ("hata", ["حتی"], 93),
             ("albate", ["البته"], 95),
             ("albateh", ["البته"], 93),
-            ("moteasefane", ["متاسفانه"], 90),
-            ("motasefaneh", ["متاسفانه"], 88),
+            // High-confidence orthographic aliases. These are explicit because
+            // global vowel rewrites damage real Persian long vowels.
+            ("motasef", ["متأسف"], 100),
+            ("moteasef", ["متأسف"], 98),
+            ("motasf", ["متأسف"], 96),
+            ("motassef", ["متأسف"], 94),
+            ("moteassef", ["متأسف"], 94),
+            ("motasefam", ["متأسفم"], 100),
+            ("moteasefam", ["متأسفم"], 98),
+            ("motassefam", ["متأسفم"], 96),
+            ("moteassefam", ["متأسفم"], 96),
+            ("motasefane", ["متأسفانه"], 100),
+            ("motasefaneh", ["متأسفانه"], 98),
+            ("moteasefane", ["متأسفانه"], 98),
+            ("moteasefaneh", ["متأسفانه"], 96),
+            ("motasfane", ["متأسفانه"], 96),
+            ("motassefane", ["متأسفانه"], 94),
+            ("motassefaneh", ["متأسفانه"], 92),
+            ("moteassefane", ["متأسفانه"], 94),
+            ("moteassefaneh", ["متأسفانه"], 92),
+            ("motaassefane", ["متأسفانه"], 92),
+            ("motaassefaneh", ["متأسفانه"], 90),
+
+            // Other common words with the same short-vowel/hamza failure class.
+            ("ehtemaalan", ["احتمالاً"], 94),
+            ("vaqean", ["واقعاً"], 94),
+            ("vagheaan", ["واقعاً"], 94),
+            ("etefaghan", ["اتفاقاً"], 96),
+            ("ettefaghan", ["اتفاقاً"], 94),
+            ("etefaqan", ["اتفاقاً"], 92),
+            ("ettefaaqan", ["اتفاقاً"], 90),
+            ("masalan", ["مثلاً"], 98),
+            ("mesalan", ["مثلاً"], 96),
+            ("masool", ["مسئول"], 98),
+            ("masoul", ["مسئول"], 96),
+            ("masul", ["مسئول"], 94),
+            ("masooliyat", ["مسئولیت"], 98),
+            ("masouliyat", ["مسئولیت"], 96),
+            ("masuliyat", ["مسئولیت"], 94),
+            ("masooliat", ["مسئولیت"], 94),
+            ("soal", ["سؤال"], 100),
+            ("soaal", ["سؤال"], 98),
+            ("sual", ["سؤال"], 96),
+            ("taeed", ["تأیید"], 98),
+            ("taeid", ["تأیید"], 96),
+            ("tayid", ["تأیید"], 94),
+            ("tasir", ["تأثیر"], 98),
+            ("taasir", ["تأثیر"], 96),
+            ("tasis", ["تأسیس"], 98),
+            ("taasis", ["تأسیس"], 96),
+            ("tamin", ["تأمین"], 98),
+            ("taamin", ["تأمین"], 96),
+            ("takhir", ["تأخیر"], 98),
+            ("taakhir", ["تأخیر"], 96),
+            ("motmaen", ["مطمئن"], 98),
+            ("motmaeen", ["مطمئن"], 96),
+            ("masale", ["مسئله"], 98),
+            ("masaleh", ["مسئله"], 96),
+            ("moassese", ["مؤسسه"], 98),
+            ("moasese", ["مؤسسه"], 96),
+            ("heyat", ["هیئت"], 96),
+            ("jozi", ["جزئی"], 96),
+            ("masayel", ["مسائل"], 96),
+            ("mabda", ["مبدأ"], 96),
+            ("mansha", ["منشأ"], 96),
+            ("momen", ["مؤمن"], 96),
+            ("moasser", ["مؤثر"], 96),
+            ("moteahel", ["متأهل"], 96),
+            ("mashallah", ["ماشاءالله"], 100),
             ("khoshbakhtane", ["خوشبختانه"], 88),
             ("khoshbakhtaneh", ["خوشبختانه"], 86),
+            ("mohtaramane", ["محترمانه"], 94),
+            ("mohtaramaneh", ["محترمانه"], 92),
+            ("mohtatane", ["محتاطانه"], 94),
+            ("mohtataneh", ["محتاطانه"], 92),
+            ("sadeghane", ["صادقانه"], 94),
+            ("sadeghaneh", ["صادقانه"], 92),
+            ("doostane", ["دوستانه"], 94),
+            ("doostaneh", ["دوستانه"], 92),
+            ("agahane", ["آگاهانه"], 94),
+            ("agahaneh", ["آگاهانه"], 92),
+            ("amiyane", ["عامیانه"], 94),
+            ("amiyaneh", ["عامیانه"], 92),
+
+            // Keep formal Roman forms formal; colloquial aliases are handled
+            // separately by FinglishConverter.
+            ("mikhaham", ["می‌خواهم"], 100),
+            ("midaham", ["می‌دهم"], 98),
+            ("miayam", ["می‌آیم"], 98),
+            ("miyayam", ["می‌آیم"], 96),
+            ("miyayi", ["می‌آیی"], 96),
+            ("miyayad", ["می‌آید"], 96),
+            ("miyayim", ["می‌آییم"], 94),
+            ("miyayid", ["می‌آیید"], 94),
+            ("miguiam", ["می‌گویم"], 98),
+            ("midanam", ["می‌دانم"], 100),
+            ("mitavanam", ["می‌توانم"], 98),
+            ("nemidanam", ["نمی‌دانم"], 100),
+            ("nemitavanam", ["نمی‌توانم"], 98),
+
+            // Direct chat abbreviations avoid dangling typo aliases whose
+            // multiword targets cannot otherwise pass through one-word lookup.
+            ("brb", ["می‌رم و برمی‌گردم"], 100),
+            ("bbl", ["بعداً میام"], 98),
+            ("gtg", ["باید برم"], 100),
+            ("g2g", ["باید برم"], 98),
+            ("idc", ["برام مهم نیست"], 98),
+            ("dgaf", ["برام مهم نیست"], 96),
+            ("tbh", ["راستش"], 98),
+            ("ngl", ["راستش"], 96),
+            ("ily", ["دوستت دارم"], 100),
+            ("luv", ["دوستت دارم"], 98),
+            ("ilysm", ["خیلی دوستت دارم"], 100),
+            ("ttyl", ["بعداً حرف می‌زنیم"], 98),
+            ("wbu", ["تو چطور؟"], 98),
+            ("hbu", ["تو چطور؟"], 96),
+            ("gm", ["صبح بخیر"], 98),
+            ("gn", ["شب بخیر"], 98),
+            ("asap", ["هرچه زودتر"], 98),
+            ("doset", ["دوستت"], 100),
+            ("dooset", ["دوستت"], 98),
+            ("duset", ["دوستت"], 96),
         ])
 
         // ===========================================
@@ -4580,7 +4813,7 @@ class FinglishDictionary {
             ("cheshm", ["چشم"], 95),
             ("cheshme", ["چشمه"], 93),
             ("eye", ["چشم"], 85),
-            ("eyes", ["چشمها"], 82),
+            ("eyes", ["چشم‌ها"], 82),
             ("abru", ["ابرو"], 90),
             ("abroo", ["ابرو"], 88),
             ("eyebrow", ["ابرو"], 82),
@@ -4912,7 +5145,7 @@ class FinglishDictionary {
             ("khodeshun", ["خودشون"], 95),
             ("khodemun", ["خودمون"], 95),
             ("khodetun", ["خودتون"], 92),
-            ("azam", ["عزم"], 90),
+            ("azm", ["عزم"], 90),
             ("beram", ["برم"], 98),
             ("berai", ["برای"], 95),
             ("bray", ["برای"], 92),
@@ -5141,7 +5374,7 @@ class FinglishDictionary {
             ("kojayi", ["کجایی"], 96),
             ("kojaei", ["کجایی"], 94),
             ("where are you", ["کجایی"], 82),
-            ("kijai", ["کیجایی"], 85),
+            ("kijai", ["کجایی"], 85),
             ("ki hasti", ["کی هستی"], 90),
             ("who are you", ["کی هستی"], 82),
             ("chi gofti", ["چی گفتی"], 95),
@@ -5411,16 +5644,35 @@ class FinglishDictionary {
         guard !normalized.isEmpty else { return }
 
         var existingValues = wordMap[normalized] ?? []
-        var seenValues = Set(existingValues)
-        for value in values where !value.isEmpty {
-            if seenValues.insert(value).inserted {
+        for rawValue in values where !rawValue.isEmpty {
+            let value = PersianOrthography.canonicalize(rawValue)
+            let skeleton = PersianOrthography.skeleton(value)
+
+            if let index = existingValues.firstIndex(where: {
+                PersianOrthography.skeleton($0) == skeleton
+            }) {
+                let existing = existingValues[index]
+                let preferred = PersianOrthography.prefers(value, over: existing) ? value : existing
+                let mergedFrequency = max(
+                    keyedFrequencyMap[normalized]?[existing] ?? 0,
+                    frequency
+                )
+
+                if preferred != existing {
+                    existingValues[index] = preferred
+                    keyedFrequencyMap[normalized]?[existing] = nil
+                }
+
+                keyedFrequencyMap[normalized, default: [:]][preferred] = mergedFrequency
+                frequencyMap[preferred] = max(frequencyMap[preferred] ?? 0, mergedFrequency)
+            } else {
                 existingValues.append(value)
+                keyedFrequencyMap[normalized, default: [:]][value] = max(
+                    keyedFrequencyMap[normalized]?[value] ?? 0,
+                    frequency
+                )
+                frequencyMap[value] = max(frequencyMap[value] ?? 0, frequency)
             }
-            keyedFrequencyMap[normalized, default: [:]][value] = max(
-                keyedFrequencyMap[normalized]?[value] ?? 0,
-                frequency
-            )
-            frequencyMap[value] = max(frequencyMap[value] ?? 0, frequency)
         }
 
         wordMap[normalized] = existingValues
@@ -5708,8 +5960,10 @@ class FinglishDictionary {
 
         var mergedPairs: [String: [String: Int]] = [:]
         for (previous, next, frequency) in wordPairs {
-            mergedPairs[previous, default: [:]][next] = max(
-                mergedPairs[previous]?[next] ?? 0,
+            let canonicalPrevious = PersianOrthography.canonicalize(previous)
+            let canonicalNext = PersianOrthography.canonicalize(next)
+            mergedPairs[canonicalPrevious, default: [:]][canonicalNext] = max(
+                mergedPairs[canonicalPrevious]?[canonicalNext] ?? 0,
                 frequency
             )
         }
