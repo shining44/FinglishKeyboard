@@ -73,7 +73,7 @@ class FinglishConverter {
         "gozasht": "گذاشت", "gzasht": "گذاشت",
         "afgand": "افکند", "andakht": "انداخت",
         "sakht": "ساخت",
-        "bastan": "بست", "bast": "بست",
+        "bast": "بست",
         "shost": "شست",
         "mord": "مرد", "murd": "مرد",
         "zist": "زیست",
