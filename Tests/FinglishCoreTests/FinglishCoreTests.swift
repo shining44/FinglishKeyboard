@@ -207,6 +207,321 @@ final class FinglishCoreTests: XCTestCase {
         }
     }
 
+    func testCanonicalVerbTokensAreCorrectInsideWordsAndPhrases() {
+        assertTopSuggestions([
+            "mireh": "می‌ره",
+            "mirin": "می‌رین",
+            "mideh": "می‌ده",
+            "midin": "می‌دین",
+            "migeh": "می‌گه",
+            "mikoneh": "می‌کنه",
+            "nemitonam": "نمی‌تونم",
+            "cant": "نمی‌تونم",
+            "anha": "آن‌ها",
+            "miyan": "میان",
+            "tabrik migam": "تبریک می‌گم",
+            "chikar mikoni": "چیکار می‌کنی",
+            "dorugh migi": "دروغ می‌گی",
+            "rast migi": "راست می‌گی",
+            "gush mide": "گوش می‌ده",
+            "gush midam": "گوش می‌دم",
+            "yad midam": "یاد می‌دم",
+        ])
+
+        XCTAssertEqual(
+            PersianOrthography.canonicalize("چیکار میکنی؟"),
+            "چیکار می‌کنی؟"
+        )
+        XCTAssertEqual(
+            PersianOrthography.canonicalize("تبریک میگم"),
+            "تبریک می‌گم"
+        )
+    }
+
+    func testProductiveSuffixesAndCompoundsKeepCanonicalBoundaries() {
+        assertTopSuggestions([
+            "ketabha": "کتاب‌ها",
+            "ketabhaye": "کتاب‌های",
+            "ketabhayi": "کتاب‌هایی",
+            "ketabhayam": "کتاب‌هایم",
+            "khaneha": "خانه‌ها",
+            "golha": "گل‌ها",
+            "pedarha": "پدر‌ها",
+            "madarha": "مادر‌ها",
+            "khaneam": "خانه‌ام",
+            "khaneash": "خانه‌اش",
+            "rafteam": "رفته‌ام",
+            "rafteim": "رفته‌ایم",
+            "dideam": "دیده‌ام",
+            "didei": "دیده‌ای",
+            "zibatar": "زیباتر",
+            "zibataram": "زیباترم",
+            "zibatarinam": "زیباترینم",
+            "rahattar": "راحت‌تر",
+            "ketabhaam": "کتاب‌هام",
+            "ketabhaash": "کتاب‌هاش",
+            "bozorgtar": "بزرگ‌تر",
+            "bozorgtarin": "بزرگ‌ترین",
+            "narmafzar": "نرم‌افزار",
+            "dastneveshte": "دست‌نوشته",
+            "bikhabar": "بی‌خبر",
+            "jostoju": "جست‌وجو",
+            "josteju": "جست‌وجو",
+        ])
+    }
+
+    func testPreviouslyDanglingTypoTargetsResolveLexically() {
+        assertTopSuggestions([
+            "amadam": "آمدم",
+            "amaadm": "آمدم",
+            "bezar": "بذار",
+            "bzar": "بذار",
+            "bozar": "بذار",
+            "besho": "بشو",
+            "bisho": "بشو",
+            "bsho": "بشو",
+            "chish": "چیش",
+            "khuneh": "خونه",
+            "khoone": "خونه",
+            "miresam": "می‌رسم",
+            "miresm": "می‌رسم",
+            "lol": "خنده",
+            "lmao": "خنده",
+            "xd": "خنده",
+            "ppl": "مردم",
+            "pplz": "مردم",
+            "cya": "می‌بینمت",
+            "btw": "راستی",
+            "anyway": "راستی",
+            "jk": "شوخی کردم",
+            "jking": "شوخی کردم",
+            "zalim": "ظالم",
+            "zaleem": "ظالم",
+            "zaalm": "ظالم",
+            "astaghfr": "استغفرالله",
+            "astaghfor": "استغفرالله",
+            "kji": "کجایی",
+            "kojii": "کجایی",
+            "jonm": "جونم",
+            "yarb": "یا رب",
+            "yarab": "یا رب",
+            "yaraab": "یا رب",
+            "jazak": "جزاک‌الله",
+            "jazakalla": "جزاک‌الله",
+            "kiaa": "کیا",
+            "inhaa": "این‌ها",
+            "aha": "آها",
+            "ahaa": "آها",
+            "tangt": "تنگت",
+            "tengit": "تنگیت",
+            "mishnevam": "می‌شنوم",
+            "mishenavam": "می‌شنوم",
+            "mishnavam": "می‌شنوم",
+            "mishnvam": "می‌شنوم",
+            "mishnavm": "می‌شنوم",
+        ])
+    }
+
+    func testMalformedStemAndPersonFormsAreCorrected() {
+        assertTopSuggestions([
+            "poshtam": "پشتم",
+            "poshti": "پشتی",
+            "neshundad": "نشون داد",
+            "neshundadam": "نشون دادم",
+            "kesid": "کشید",
+            "kesidam": "کشیدم",
+            "biayin": "بیاین",
+            "mishinan": "می‌شینن",
+            "miyayand": "می‌آیند",
+            "mikhahi": "می‌خواهی",
+            "mikhahad": "می‌خواهد",
+            "midanad": "می‌داند",
+            "mitavanad": "می‌تواند",
+            "nemikhahad": "نمی‌خواهد",
+            "nemidanad": "نمی‌داند",
+            "nemitavanad": "نمی‌تواند",
+            "khasteam": "خسته‌ام",
+            "khandid": "خندید",
+            "koshid": "کوشید",
+            "barid": "بارید",
+            "rand": "راند",
+            "bastan": "بستن",
+            "kasham": "کشم",
+            "sakhtam": "ساختم",
+            "manha": "من‌ها",
+        ])
+
+        XCTAssertFalse(FinglishDictionary.shared.hasExactMatch(for: "nishinan"))
+    }
+
+    func testAdditionalCanonicalHamzaAliases() {
+        assertTopSuggestions([
+            "taakid": "تأکید",
+            "takid": "تأکید",
+            "taalif": "تألیف",
+            "talif": "تألیف",
+            "taammol": "تأمل",
+            "taasof": "تأسف",
+            "moteasser": "متأثر",
+            "moteakher": "متأخر",
+            "moallef": "مؤلف",
+            "moaddab": "مؤدب",
+            "roasa": "رؤسا",
+            "shooun": "شئون",
+            "jorat": "جرئت",
+            "mamoor": "مأمور",
+            "mamur": "مأمور",
+            "mayoos": "مأیوس",
+            "mayus": "مأیوس",
+            "maakhaz": "مأخذ",
+            "makhaz": "مأخذ",
+            "moakhaze": "مؤاخذه",
+        ])
+
+        let migrations = [
+            "تاکید": "تأکید",
+            "تالیف": "تألیف",
+            "تامل": "تأمل",
+            "تاسف": "تأسف",
+            "متاثر": "متأثر",
+            "متاخر": "متأخر",
+            "مولف": "مؤلف",
+            "مودب": "مؤدب",
+            "روسا": "رؤسا",
+            "جرات": "جرئت",
+            "مامور": "مأمور",
+            "مایوس": "مأیوس",
+            "ماخذ": "مأخذ",
+            "مواخذه": "مؤاخذه",
+        ]
+
+        for (legacy, canonical) in migrations {
+            XCTAssertEqual(PersianOrthography.canonicalize(legacy), canonical, legacy)
+        }
+    }
+
+    func testHighConfidenceLexicalFallbackGapsAreExactWords() {
+        assertTopSuggestions([
+            "daghigh": "دقیق",
+            "daghighan": "دقیقاً",
+            "kamelan": "کاملاً",
+            "rasman": "رسماً",
+            "shey": "شیء",
+            "qoran": "قرآن",
+            "etelaat": "اطلاعات",
+            "ertebat": "ارتباط",
+            "entezar": "انتظار",
+            "elm": "علم",
+            "omr": "عمر",
+            "zarf": "ظرف",
+            "mosbat": "مثبت",
+            "ensaf": "انصاف",
+            "ensan": "انسان",
+            "emkan": "امکان",
+            "emza": "امضا",
+            "ehtiyat": "احتیاط",
+            "estelah": "اصطلاح",
+            "dalil": "دلیل",
+            "nazar": "نظر",
+            "darkhast": "درخواست",
+            "vaziyat": "وضعیت",
+            "sharayet": "شرایط",
+            "ahamiyat": "اهمیت",
+            "mozu": "موضوع",
+            "mozoo": "موضوع",
+            "ayande": "آینده",
+        ])
+    }
+
+    func testAcademyBackedCompoundBoundaries() {
+        assertTopSuggestions([
+            "walking": "پیاده‌روی",
+            "business": "کسب‌وکار",
+            "kasb o kar": "کسب‌وکار",
+            "tishirt": "تی‌شرت",
+            "inqadr": "این‌قدر",
+            "inghadr": "این‌قدر",
+            "inghad": "این‌قدر",
+            "injur": "این‌جور",
+            "injuri": "این‌جوری",
+            "injori": "این‌جوری",
+            "unjuri": "اون‌جوری",
+            "unjur": "اون‌جور",
+            "hamunjur": "همون‌جور",
+            "haminja": "همین‌جا",
+            "haminjur": "همین‌جور",
+            "haminjor": "همین‌جور",
+            "hamintor": "همین‌طور",
+            "hamunja": "همون‌جا",
+            "yekdafe": "یک‌دفعه",
+            "harruz": "هر روز",
+            "harshab": "هر شب",
+        ])
+    }
+
+    func testComparativeBoundaryDependsOnJoiningLetter() {
+        assertTopSuggestions([
+            "bozorgtar": "بزرگ‌تر",
+            "bozorgtarin": "بزرگ‌ترین",
+            "kuchiktar": "کوچیک‌تر",
+            "kuchiktarin": "کوچیک‌ترین",
+            "kotahtar": "کوتاه‌تر",
+            "khubtar": "خوب‌تر",
+            "khubtarin": "خوب‌ترین",
+            "garmtar": "گرم‌تر",
+            "kam tar": "کمتر",
+            "jadidtar": "جدیدتر",
+            "jadidtarin": "جدیدترین",
+            "bolandtar": "بلندتر",
+        ])
+    }
+
+    func testAmbiguousLatinKeysKeepTheirIntendedLexicalFamilies() {
+        assertTopSuggestions([
+            "sher": "شعر",
+            "shir": "شیر",
+            "shar": "شر",
+            "abi": "آبی",
+            "abji": "آبجی",
+            "unja": "اونجا",
+            "anja": "آنجا",
+            "hichchi": "هیچ‌چی",
+            "hichi": "هیچی",
+            "egg": "تخم‌مرغ",
+        ])
+
+        let forbidden: [String: Set<String>] = [
+            "abi": ["آبجی"],
+            "unja": ["آنجا"],
+            "hichchi": ["هیچی"],
+            "sher": ["شیر", "شر"],
+            "egg": ["تخم مرغ"],
+        ]
+
+        for (input, removed) in forbidden {
+            XCTAssertTrue(
+                Set(converter.getSuggestions(for: input)).isDisjoint(with: removed),
+                input
+            )
+        }
+    }
+
+    func testExactDictionaryWordsDoNotLeakGeneratedAlternatives() {
+        let input = "motasefane"
+        let dictionarySuggestions = Set(
+            FinglishDictionary.shared
+                .findCandidates(for: input, includeFuzzy: false, limit: 10)
+                .map(\.value)
+        )
+        let converterSuggestions = Set(converter.getSuggestions(for: input))
+
+        XCTAssertFalse(dictionarySuggestions.isEmpty)
+        XCTAssertTrue(
+            converterSuggestions.isSubset(of: dictionarySuggestions),
+            "generated alternatives leaked for an exact key: \(converterSuggestions)"
+        )
+    }
+
     private func assertTopSuggestions(
         _ cases: [String: String],
         file: StaticString = #filePath,
