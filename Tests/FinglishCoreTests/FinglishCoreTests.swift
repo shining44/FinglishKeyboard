@@ -341,6 +341,7 @@ final class FinglishCoreTests: XCTestCase {
             "koshid": "کوشید",
             "barid": "بارید",
             "rand": "راند",
+            "bastan": "بستن",
         ])
 
         XCTAssertFalse(FinglishDictionary.shared.hasExactMatch(for: "nishinan"))
