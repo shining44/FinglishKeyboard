@@ -24,15 +24,16 @@ class FinglishConverter {
 
     // Verb suffixes - Present tense conjugations
     private let presentSuffixes: [(finglish: String, farsi: String)] = [
+        ("and", "ند"),
         ("am", "م"),
         ("im", "یم"),
         ("in", "ین"),
         ("id", "ید"),
+        ("ad", "د"),
         ("i", "ی"),
         ("e", "ه"),
         ("eh", "ه"),
         ("an", "ن"),
-        ("and", "ند"),
     ]
 
     // Verb suffixes - Past tense conjugations
@@ -68,7 +69,7 @@ class FinglishConverter {
         "zad": "زد",
         "keshid": "کشید", "kshid": "کشید",
         "doshid": "دوشید",
-        "posht": "پوشت", "pushid": "پوشید",
+        "pushid": "پوشید",
         "gozasht": "گذاشت", "gzasht": "گذاشت",
         "afgand": "افکند", "andakht": "انداخت",
         "sakht": "ساخت",
@@ -100,6 +101,13 @@ class FinglishConverter {
 
     // Noun/adjective suffixes
     private let nounSuffixes: [(finglish: String, farsi: String)] = [
+        ("hayeshan", "هایشان"),
+        ("hayeman", "هایمان"),
+        ("hayetan", "هایتان"),
+        ("hayash", "هایش"),
+        ("hayam", "هایم"),
+        ("hayat", "هایت"),
+        ("hayand", "هایند"),
         ("haye", "های"),
         ("haaye", "های"),
         ("hayee", "هایی"),
@@ -166,7 +174,7 @@ class FinglishConverter {
         "khun": "خون", "khan": "خوان", "khund": "خوند", "khand": "خواند",
         "nevis": "نویس", "nevesht": "نوشت", "nevisand": "نویسند",
         "pors": "پرس", "porsid": "پرسید",
-        "neshun": "نشون", "neshan": "نشان", "neshundad": "نشونداد",
+        "neshun": "نشون", "neshan": "نشان", "neshundad": "نشون داد",
         "gush": "گوش", "gushid": "گوشید",
 
         // === EATING & DRINKING ===
@@ -182,7 +190,7 @@ class FinglishConverter {
         "gozar": "گذار", "gozasht": "گذاشت", "zar": "ذار", "zasht": "ذاشت",
         "dar": "دار", "dasht": "داشت", "daram": "دارم",
         "de": "ده", "deh": "ده", "dad": "داد", "dadan": "دادن",
-        "khast": "خواست", "kha": "خوا",
+        "khast": "خواست", "kha": "خوا", "khah": "خواه",
         "bast": "بست", "band": "بند",
         "chasb": "چسب", "chasbid": "چسبید", "chasband": "چسباند",
         "kash": "کش", "kashid": "کشید",
@@ -263,7 +271,7 @@ class FinglishConverter {
         "kub": "کوب", "kubid": "کوبید",
         "borid": "برید", "burid": "برید",
         "doz": "دوز", "dukht": "دوخت", "dookht": "دوخت",
-        "kes": "کس", "kesid": "کسید",
+        "kes": "کس", "kesid": "کشید",
         "vel": "ول", "volkon": "ول‌کن",
 
         // === ADDITIONAL COMMON STEMS ===
@@ -285,6 +293,7 @@ class FinglishConverter {
     // Common non-verb stems that should remain lexical when suffixes are added.
     // This keeps words like badi -> بدی from falling back to phonetic بادی.
     private let lexicalStems: [String: String] = [
+        "ketab": "کتاب",
         "bad": "بد",
         "khub": "خوب",
         "khoob": "خوب",
@@ -756,6 +765,26 @@ class FinglishConverter {
             order += 1
         }
 
+        func rankedUniqueSuggestions() -> [String] {
+            let ranked = candidates.sorted {
+                if $0.score == $1.score {
+                    return $0.order < $1.order
+                }
+                return $0.score > $1.score
+            }
+
+            var seen = Set<String>()
+            var suggestions: [String] = []
+            for candidate in ranked {
+                if seen.insert(candidate.text).inserted {
+                    suggestions.append(candidate.text)
+                }
+                if suggestions.count >= 8 { break }
+            }
+
+            return suggestions
+        }
+
         // 1. Apply a typo alias only when the input is not already a real
         // dictionary key. Several valid conversational words are one edit away
         // from another word (mah/ma, yeki/yek, mikhan/mikham, chetore/chetor).
@@ -787,6 +816,21 @@ class FinglishConverter {
             for candidate in originalCandidates {
                 addCandidate(candidate.value, score: candidate.score - 150, preservesCuratedSpelling: true)
             }
+        }
+
+        // Once a current exact key resolves, generated morphology and phonetic
+        // variants can only add lower-confidence junk. Keep curated semantic
+        // alternatives and prefix completions, then stop the expensive fallback
+        // pipeline. This also prevents an exact spelling correction from being
+        // shown beside newly manufactured misspellings.
+        let hasExactDictionaryMatch = dictCandidates.contains { candidate in
+            if case .exact = candidate.source {
+                return true
+            }
+            return false
+        }
+        if hasExactDictionaryMatch {
+            return rankedUniqueSuggestions()
         }
 
         // 5. Check for compound word matches
@@ -842,24 +886,7 @@ class FinglishConverter {
             }
         }
 
-        let ranked = candidates.sorted {
-            if $0.score == $1.score {
-                return $0.order < $1.order
-            }
-            return $0.score > $1.score
-        }
-
-        var seen = Set<String>()
-        var suggestions: [String] = []
-        for candidate in ranked {
-            if !seen.contains(candidate.text) {
-                seen.insert(candidate.text)
-                suggestions.append(candidate.text)
-            }
-            if suggestions.count >= 8 { break }
-        }
-
-        return suggestions
+        return rankedUniqueSuggestions()
     }
 
     // ============================================
@@ -1001,6 +1028,14 @@ class FinglishConverter {
     /// Analyzes word structure and transliterates based on Persian morphology
     private func morphologicalTransliterate(_ input: String) -> String {
         var word = input.lowercased()
+
+        // Handle Persian words ending in ه before generic suffix parsing.
+        // Directly concatenating the person ending produces forms such as
+        // دیدهی and رفتهم instead of دیده‌ای and رفته‌ام.
+        if let hehFinalResult = tryHehFinalPersonEnding(word) {
+            return hehFinalResult
+        }
+
         var prefix = ""
         var suffix = ""
         var isImperative = false
@@ -1011,7 +1046,7 @@ class FinglishConverter {
             if word.hasPrefix(finglish) && word.count > finglish.count + 1 {
                 // Check if remainder looks like a verb stem
                 let remainder = String(word.dropFirst(finglish.count))
-                if verbStems[remainder] != nil || pastTenseStems[remainder] != nil || remainder.count >= 2 {
+                if matchesVerbPattern(remainder) {
                     prefix = farsi
                     word = remainder
                     isImperative = true
@@ -1024,9 +1059,12 @@ class FinglishConverter {
         if !isImperative {
             for (finglish, farsi) in verbPrefixes {
                 if word.hasPrefix(finglish) && word.count > finglish.count + 1 {
-                    prefix = farsi
-                    word = String(word.dropFirst(finglish.count))
-                    break
+                    let remainder = String(word.dropFirst(finglish.count))
+                    if matchesVerbPattern(remainder) {
+                        prefix = farsi
+                        word = remainder
+                        break
+                    }
                 }
             }
         }
@@ -1129,17 +1167,18 @@ class FinglishConverter {
 
     /// Check if a word looks like past tense
     private func checkPastTense(_ word: String) -> Bool {
-        // Check if the word (minus possible suffix) matches a past tense stem
-        for (stem, _) in pastTenseStems {
-            if word.hasPrefix(stem) {
-                return true
-            }
+        if pastTenseStems[word] != nil {
+            return true
         }
 
-        // Common past tense endings
-        let pastEndings = ["id", "ad", "od", "ast", "esht", "aft", "ord", "urd"]
-        for ending in pastEndings {
-            if word.contains(ending) {
+        // A past reading is licensed only when stripping one person ending
+        // leaves a complete known past stem. Prefix/substring scans caused
+        // unrelated nouns to enter the verb path.
+        let suffixes = Array(Set(pastSuffixes.map { $0.finglish }))
+            .sorted { $0.count > $1.count }
+        for suffix in suffixes where word.hasSuffix(suffix) && word.count > suffix.count {
+            let stem = String(word.dropLast(suffix.count))
+            if pastTenseStems[stem] != nil {
                 return true
             }
         }
@@ -1147,19 +1186,60 @@ class FinglishConverter {
         return false
     }
 
-    /// Check if a word matches common verb patterns
-    private func matchesVerbPattern(_ word: String) -> Bool {
-        // Common verb stem patterns
-        let verbPatterns = ["am", "im", "id", "i", "e", "and", "an"]
-        for pattern in verbPatterns {
-            if word.hasSuffix(pattern) {
-                return true
+    /// Handles a heh-final noun/adjective clitic or a past participle ending.
+    /// The Latin boundary is explicit (…e + person ending), and a known exact
+    /// heh-final word or known past stem is required, keeping the rule bounded.
+    private func tryHehFinalPersonEnding(_ word: String) -> String? {
+        let endings: [(finglish: String, farsi: String)] = [
+            ("and", "اند"),
+            ("im", "ایم"),
+            ("id", "اید"),
+            ("am", "ام"),
+            ("i", "ای"),
+        ]
+
+        for ending in endings where word.hasSuffix(ending.finglish) {
+            let baseWord = String(word.dropLast(ending.finglish.count))
+            guard baseWord.hasSuffix("e"), baseWord.count > 1 else { continue }
+
+            let exactCandidates = dictionary.findCandidates(
+                for: baseWord,
+                includeFuzzy: false,
+                limit: 12
+            )
+            if let exactHehFinal = exactCandidates.first(where: { candidate in
+                guard candidate.value.hasSuffix("ه") else { return false }
+                if case .exact = candidate.source { return true }
+                return false
+            }) {
+                return exactHehFinal.value + FinglishConverter.ZWNJ + ending.farsi
+            }
+
+            let stemKey = String(baseWord.dropLast())
+            if let pastStem = pastTenseStems[stemKey] {
+                return pastStem + "ه" + FinglishConverter.ZWNJ + ending.farsi
             }
         }
 
-        // Check for known verb stems
-        for stem in verbStems.keys {
-            if word.hasPrefix(stem) || word.contains(stem) {
+        return nil
+    }
+
+    /// Check if a word matches common verb patterns
+    private func matchesVerbPattern(_ word: String) -> Bool {
+        if verbStems[word] != nil || pastTenseStems[word] != nil {
+            return true
+        }
+
+        // A person suffix is evidence of a verb only when removing it leaves a
+        // known stem. The former substring scan matched one-letter stems such as
+        // "a" and "g", causing ordinary plurals like ketabha to be conjugated.
+        let suffixes = Array(Set(
+            presentSuffixes.map { $0.finglish } + pastSuffixes.map { $0.finglish }
+        )).sorted { $0.count > $1.count }
+
+        for suffix in suffixes where word.hasSuffix(suffix) && word.count > suffix.count {
+            let stem = String(word.dropLast(suffix.count))
+            if verbStems[stem] != nil || pastTenseStems[stem] != nil {
                 return true
             }
         }
