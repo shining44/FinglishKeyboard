@@ -1115,6 +1115,15 @@ class FinglishConverter {
         if let wholeVerbStem {
             stem = wholeVerbStem
         }
+        // Once a licensed verb ending was removed, keep the verb reading of
+        // an ambiguous Latin stem (kasham -> کشم, not کاشم; sakhtam -> ساختم,
+        // not سختم). Noun/adjective lookup remains first for the noun path.
+        else if isLikelyVerb, let pastStem = pastTenseStems[word] {
+            stem = pastStem
+        }
+        else if isLikelyVerb, let verbStem = verbStems[word] {
+            stem = verbStem
+        }
         // Prefer an explicitly curated lexical stem.
         else if let lexicalStem = lexicalStems[word] {
             stem = lexicalStem
