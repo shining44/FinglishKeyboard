@@ -224,6 +224,7 @@ final class FinglishCoreTests: XCTestCase {
             "dorugh migi": "دروغ می‌گی",
             "rast migi": "راست می‌گی",
             "gush mide": "گوش می‌ده",
+            "gush midam": "گوش می‌دم",
             "yad midam": "یاد می‌دم",
         ])
 
@@ -245,6 +246,8 @@ final class FinglishCoreTests: XCTestCase {
             "ketabhayam": "کتاب‌هایم",
             "khaneha": "خانه‌ها",
             "golha": "گل‌ها",
+            "pedarha": "پدر‌ها",
+            "madarha": "مادر‌ها",
             "khaneam": "خانه‌ام",
             "khaneash": "خانه‌اش",
             "rafteam": "رفته‌ام",
@@ -307,6 +310,11 @@ final class FinglishCoreTests: XCTestCase {
             "ahaa": "آها",
             "tangt": "تنگت",
             "tengit": "تنگیت",
+            "mishnevam": "می‌شنوم",
+            "mishenavam": "می‌شنوم",
+            "mishnavam": "می‌شنوم",
+            "mishnvam": "می‌شنوم",
+            "mishnavm": "می‌شنوم",
         ])
     }
 
@@ -329,6 +337,10 @@ final class FinglishCoreTests: XCTestCase {
             "nemidanad": "نمی‌داند",
             "nemitavanad": "نمی‌تواند",
             "khasteam": "خسته‌ام",
+            "khandid": "خندید",
+            "koshid": "کوشید",
+            "barid": "بارید",
+            "rand": "راند",
         ])
 
         XCTAssertFalse(FinglishDictionary.shared.hasExactMatch(for: "nishinan"))
@@ -410,6 +422,49 @@ final class FinglishCoreTests: XCTestCase {
             "mozu": "موضوع",
             "mozoo": "موضوع",
             "ayande": "آینده",
+        ])
+    }
+
+    func testAcademyBackedCompoundBoundaries() {
+        assertTopSuggestions([
+            "walking": "پیاده‌روی",
+            "business": "کسب‌وکار",
+            "kasb o kar": "کسب‌وکار",
+            "tishirt": "تی‌شرت",
+            "inqadr": "این‌قدر",
+            "inghadr": "این‌قدر",
+            "inghad": "این‌قدر",
+            "injur": "این‌جور",
+            "injuri": "این‌جوری",
+            "injori": "این‌جوری",
+            "unjuri": "اون‌جوری",
+            "unjur": "اون‌جور",
+            "hamunjur": "همون‌جور",
+            "haminja": "همین‌جا",
+            "haminjur": "همین‌جور",
+            "haminjor": "همین‌جور",
+            "hamintor": "همین‌طور",
+            "hamunja": "همون‌جا",
+            "yekdafe": "یک‌دفعه",
+            "harruz": "هر روز",
+            "harshab": "هر شب",
+        ])
+    }
+
+    func testComparativeBoundaryDependsOnJoiningLetter() {
+        assertTopSuggestions([
+            "bozorgtar": "بزرگ‌تر",
+            "bozorgtarin": "بزرگ‌ترین",
+            "kuchiktar": "کوچیک‌تر",
+            "kuchiktarin": "کوچیک‌ترین",
+            "kotahtar": "کوتاه‌تر",
+            "khubtar": "خوب‌تر",
+            "khubtarin": "خوب‌ترین",
+            "garmtar": "گرم‌تر",
+            "kam tar": "کمتر",
+            "jadidtar": "جدیدتر",
+            "jadidtarin": "جدیدترین",
+            "bolandtar": "بلندتر",
         ])
     }
 
