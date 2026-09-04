@@ -14,6 +14,8 @@
 		A1000013 /* KeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000014 /* KeyboardView.swift */; };
 		A1000015 /* FinglishConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016 /* FinglishConverter.swift */; };
 		A1000017 /* FinglishDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000018 /* FinglishDictionary.swift */; };
+		A1000105 /* FinglishConverter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000016 /* FinglishConverter.swift */; };
+		A1000106 /* FinglishDictionary.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000018 /* FinglishDictionary.swift */; };
 		A1000019 /* KeyButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000020 /* KeyButton.swift */; };
 		A1000021 /* KeyRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000022 /* KeyRow.swift */; };
 		A1000023 /* SuggestionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000024 /* SuggestionBar.swift */; };
@@ -243,6 +245,8 @@
 			files = (
 				A1000001 /* FinglishKeyboardApp.swift in Sources */,
 				A1000003 /* ContentView.swift in Sources */,
+				A1000105 /* FinglishConverter.swift in Sources */,
+				A1000106 /* FinglishDictionary.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

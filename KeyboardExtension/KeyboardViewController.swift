@@ -477,20 +477,33 @@ final class UserLexicon {
     private let nextWordChoicesKey = "FinglishKeyboard.UserLexicon.nextWordChoices.v2"
     private let maxInputs = 500
     private let maxCandidatesPerInput = 12
-    private let maxCandidateWeight = 40
+    private static let maxCandidateWeight = 40
 
     private var suggestionChoices: [String: [String: Int]]
     private var nextWordChoices: [String: [String: Int]]
 
     private init() {
-        suggestionChoices = Self.loadCounts(from: defaults, key: suggestionChoicesKey)
-        nextWordChoices = Self.loadCounts(from: defaults, key: nextWordChoicesKey)
+        suggestionChoices = Self.canonicalizedCounts(
+            Self.loadCounts(from: defaults, key: suggestionChoicesKey),
+            canonicalizeKeys: false
+        )
+        nextWordChoices = Self.canonicalizedCounts(
+            Self.loadCounts(from: defaults, key: nextWordChoicesKey),
+            canonicalizeKeys: true
+        )
     }
 
     func rankedSuggestions(for input: String, base: [String], limit: Int = 8) -> [String] {
         let key = normalizedFinglish(input)
         guard !key.isEmpty else { return Array(base.prefix(limit)) }
-        return rankedResults(learned: suggestionChoices[key] ?? [:], base: base, limit: limit)
+
+        // Learning may reorder current engine results, but must never resurrect
+        // a spelling that a newer dictionary or converter has removed.
+        let baseSet = Set(base)
+        let activeLearned = (suggestionChoices[key] ?? [:]).filter {
+            baseSet.contains($0.key)
+        }
+        return rankedResults(learned: activeLearned, base: base, limit: limit)
     }
 
     func rankedPredictions(after previousWord: String, base: [String], limit: Int = 8) -> [String] {
@@ -541,7 +554,7 @@ final class UserLexicon {
             .map { candidate -> (candidate: String, score: Int, baseRank: Int) in
                 let rank = baseRank[candidate]
                 let dictionaryScore = rank.map { max(0, 1_000 - $0 * 90) } ?? 350
-                let learnedWeight = min(max(learned[candidate] ?? 0, 0), maxCandidateWeight)
+                let learnedWeight = min(max(learned[candidate] ?? 0, 0), Self.maxCandidateWeight)
                 let learnedScore = learnedWeight * 200
 
                 return (
@@ -567,7 +580,7 @@ final class UserLexicon {
         guard !key.isEmpty, !value.isEmpty, delta != 0 else { return }
 
         var values = map[key] ?? [:]
-        let updated = min((values[value] ?? 0) + delta, maxCandidateWeight)
+        let updated = min((values[value] ?? 0) + delta, Self.maxCandidateWeight)
         if updated > 0 {
             values[value] = updated
         } else {
@@ -615,7 +628,9 @@ final class UserLexicon {
     }
 
     private func normalizedFarsi(_ input: String) -> String {
-        input.trimmingCharacters(in: .whitespacesAndNewlines)
+        PersianOrthography.canonicalize(
+            input.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
     }
 
     private func saveSuggestions() {
@@ -632,6 +647,26 @@ final class UserLexicon {
             return [:]
         }
         return counts
+    }
+
+    private static func canonicalizedCounts(
+        _ counts: [String: [String: Int]],
+        canonicalizeKeys: Bool
+    ) -> [String: [String: Int]] {
+        var result: [String: [String: Int]] = [:]
+
+        for (rawKey, values) in counts {
+            let key = canonicalizeKeys ? PersianOrthography.canonicalize(rawKey) : rawKey
+            for (rawValue, weight) in values {
+                let value = PersianOrthography.canonicalize(rawValue)
+                result[key, default: [:]][value] = min(
+                    (result[key]?[value] ?? 0) + weight,
+                    Self.maxCandidateWeight
+                )
+            }
+        }
+
+        return result
     }
 
     private static func saveCounts(_ counts: [String: [String: Int]], to defaults: UserDefaults, key: String) {

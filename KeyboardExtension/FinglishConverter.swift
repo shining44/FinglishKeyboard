@@ -479,7 +479,7 @@ class FinglishConverter {
         ("mikhaham", "mikham", "می‌خوام"),
         ("midaham", "midam", "می‌دم"),
         ("miravam", "miram", "می‌رم"),
-        ("miayam", "miam", "می‌آم"),
+        ("miayam", "miam", "میام"),
         ("mibinam", "mibinam", "می‌بینم"),
         ("mikunam", "mikonam", "می‌کنم"),
         ("miguiam", "migam", "می‌گم"),
@@ -749,7 +749,8 @@ class FinglishConverter {
         var order = 0
 
         func addCandidate(_ s: String, score: Int, preservesCuratedSpelling: Bool = false) {
-            let cleaned = preservesCuratedSpelling ? s : cleanupResult(s)
+            let canonical = PersianOrthography.canonicalize(s)
+            let cleaned = preservesCuratedSpelling ? canonical : cleanupResult(canonical)
             guard !cleaned.isEmpty else { return }
             candidates.append((cleaned, score, order))
             order += 1
@@ -928,13 +929,6 @@ class FinglishConverter {
         // Direct match on colloquial forms
         for (_, colloquial, farsi) in colloquialTransforms {
             if lowered == colloquial {
-                return farsi
-            }
-        }
-
-        // Also match formal forms and return farsi
-        for (formal, _, farsi) in colloquialTransforms {
-            if lowered == formal {
                 return farsi
             }
         }
@@ -1208,22 +1202,8 @@ class FinglishConverter {
 
             // 2. Handle vowels with position awareness
             let char = chars[i]
-            let isStart = (i == 0)
-            let isEnd = (i == chars.count - 1)
-            let isAfterConsonant = i > 0 && isConsonant(chars[i-1])
-            let isBeforeConsonant = i < chars.count - 1 && isConsonant(chars[i+1])
-
-            if let positional = positionalMappings[char] {
-                if isStart {
-                    result += positional.start
-                } else if isEnd {
-                    result += positional.end
-                } else if isAfterConsonant && isBeforeConsonant {
-                    // Middle of word between consonants - often silent or short
-                    result += positional.middle
-                } else {
-                    result += positional.standalone
-                }
+            if let positional = positionalVowelMapping(for: char, at: i, in: chars) {
+                result += positional
                 i += 1
                 continue
             }
@@ -1241,6 +1221,29 @@ class FinglishConverter {
         }
 
         return result
+    }
+
+    private func positionalVowelMapping(
+        for character: Character,
+        at index: Int,
+        in characters: [Character]
+    ) -> String? {
+        guard let positional = positionalMappings[character] else { return nil }
+
+        if index == 0 {
+            return positional.start
+        }
+
+        if index == characters.count - 1 {
+            return positional.end
+        }
+
+        if isConsonant(characters[index - 1]),
+           isConsonant(characters[index + 1]) {
+            return positional.middle
+        }
+
+        return positional.standalone
     }
 
     private func isConsonant(_ char: Character) -> Bool {
@@ -1391,8 +1394,8 @@ class FinglishConverter {
                     firstReplaced = true
                 } else if let mapping = consonantMappings[c] {
                     result += mapping
-                } else if let positional = positionalMappings[c] {
-                    result += positional.standalone
+                } else if let positional = positionalVowelMapping(for: c, at: i, in: chars) {
+                    result += positional
                 } else if let digit = persianNumbers[c] {
                     result += String(digit)
                 } else {
