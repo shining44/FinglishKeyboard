@@ -207,6 +207,103 @@ final class FinglishCoreTests: XCTestCase {
         }
     }
 
+    func testCanonicalVerbTokensAreCorrectInsideWordsAndPhrases() {
+        assertTopSuggestions([
+            "mireh": "می‌ره",
+            "mirin": "می‌رین",
+            "mideh": "می‌ده",
+            "midin": "می‌دین",
+            "migeh": "می‌گه",
+            "mikoneh": "می‌کنه",
+            "nemitonam": "نمی‌تونم",
+            "cant": "نمی‌تونم",
+            "anha": "آن‌ها",
+            "miyan": "میان",
+            "tabrik migam": "تبریک می‌گم",
+            "chikar mikoni": "چیکار می‌کنی",
+            "dorugh migi": "دروغ می‌گی",
+            "rast migi": "راست می‌گی",
+            "gush mide": "گوش می‌ده",
+            "yad midam": "یاد می‌دم",
+        ])
+
+        XCTAssertEqual(
+            PersianOrthography.canonicalize("چیکار میکنی؟"),
+            "چیکار می‌کنی؟"
+        )
+        XCTAssertEqual(
+            PersianOrthography.canonicalize("تبریک میگم"),
+            "تبریک می‌گم"
+        )
+    }
+
+    func testProductiveSuffixesAndCompoundsKeepCanonicalBoundaries() {
+        assertTopSuggestions([
+            "ketabha": "کتاب‌ها",
+            "ketabhaye": "کتاب‌های",
+            "ketabhayi": "کتاب‌هایی",
+            "khaneha": "خانه‌ها",
+            "khaneam": "خانه‌ام",
+            "khaneash": "خانه‌اش",
+            "rafteam": "رفته‌ام",
+            "didei": "دیده‌ای",
+            "bozorgtar": "بزرگ‌تر",
+            "bozorgtarin": "بزرگ‌ترین",
+            "narmafzar": "نرم‌افزار",
+            "dastneveshte": "دست‌نوشته",
+            "bikhabar": "بی‌خبر",
+            "jostoju": "جست‌وجو",
+            "josteju": "جست‌وجو",
+        ])
+    }
+
+    func testPreviouslyDanglingTypoTargetsResolveLexically() {
+        assertTopSuggestions([
+            "amadam": "آمدم",
+            "amaadm": "آمدم",
+            "bezar": "بذار",
+            "bzar": "بذار",
+            "bozar": "بذار",
+            "besho": "بشو",
+            "bisho": "بشو",
+            "bsho": "بشو",
+            "chish": "چیش",
+            "khuneh": "خونه",
+            "khoone": "خونه",
+            "miresam": "می‌رسم",
+            "miresm": "می‌رسم",
+            "lol": "خنده",
+            "lmao": "خنده",
+            "xd": "خنده",
+            "ppl": "مردم",
+            "pplz": "مردم",
+            "cya": "می‌بینمت",
+            "btw": "راستی",
+            "anyway": "راستی",
+            "jk": "شوخی کردم",
+            "jking": "شوخی کردم",
+            "zalim": "ظالم",
+            "zaleem": "ظالم",
+            "zaalm": "ظالم",
+        ])
+    }
+
+    func testExactDictionaryWordsDoNotLeakGeneratedAlternatives() {
+        let input = "motasefane"
+        let dictionarySuggestions = Set(
+            FinglishDictionary.shared
+                .findCandidates(for: input, includeFuzzy: false, limit: 10)
+                .map(\.value)
+        )
+        let converterSuggestions = Set(converter.getSuggestions(for: input))
+
+        XCTAssertFalse(dictionarySuggestions.isEmpty)
+        XCTAssertTrue(
+            converterSuggestions.isSubset(of: dictionarySuggestions),
+            "generated alternatives leaked for an exact key: \(converterSuggestions)"
+        )
+    }
+
     private func assertTopSuggestions(
         _ cases: [String: String],
         file: StaticString = #filePath,
