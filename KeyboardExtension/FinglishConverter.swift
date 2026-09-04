@@ -1076,43 +1076,32 @@ class FinglishConverter {
 
         // 4. Check if this looks like a verb
         let isLikelyVerb = !prefix.isEmpty || isImperative || isPastTense || matchesVerbPattern(word)
+        let wholeVerbStem = pastTenseStems[word] ?? verbStems[word]
 
-        // 5. Extract suffix based on word type - try multiple suffixes (suffix chaining)
+        // 5. Extract one structurally licensed ending.
         var suffixes: [String] = []
 
-        if isLikelyVerb {
+        if isLikelyVerb && wholeVerbStem == nil {
             // Try verb suffixes
             for (finglish, farsi) in presentSuffixes {
                 if word.hasSuffix(finglish) && word.count > finglish.count {
-                    suffixes.insert(farsi, at: 0)
+                    let possibleStem = String(word.dropLast(finglish.count))
+                    if verbStems[possibleStem] != nil || pastTenseStems[possibleStem] != nil {
+                        suffixes.insert(farsi, at: 0)
+                        word = possibleStem
+                        break
+                    }
+                }
+            }
+        } else if !isLikelyVerb {
+            // Longest combined endings appear first in nounSuffixes. Remove
+            // exactly one licensed ending: repeated stripping turned rahat+tar
+            // into rah+at+tar and produced راهتتر.
+            for (finglish, farsi) in nounSuffixes {
+                if word.hasSuffix(finglish) && word.count > finglish.count {
+                    suffixes.append(farsi)
                     word = String(word.dropLast(finglish.count))
                     break
-                }
-            }
-            // Also try past suffixes if it looks like past tense
-            if isPastTense {
-                for (finglish, farsi) in pastSuffixes {
-                    if word.hasSuffix(finglish) && word.count > finglish.count {
-                        if suffixes.isEmpty {
-                            suffixes.insert(farsi, at: 0)
-                            word = String(word.dropLast(finglish.count))
-                        }
-                        break
-                    }
-                }
-            }
-        } else {
-            // Try noun suffixes - support chaining (e.g., ketabhayam = کتاب‌هایم)
-            var foundSuffix = true
-            while foundSuffix && word.count > 2 {
-                foundSuffix = false
-                for (finglish, farsi) in nounSuffixes {
-                    if word.hasSuffix(finglish) && word.count > finglish.count {
-                        suffixes.insert(farsi, at: 0)
-                        word = String(word.dropLast(finglish.count))
-                        foundSuffix = true
-                        break
-                    }
                 }
             }
         }
@@ -1123,8 +1112,24 @@ class FinglishConverter {
         var stem: String
 
         // Check lexical stems first so adjective/noun suffixes keep their meaning.
-        if let lexicalStem = lexicalStems[word] {
+        if let wholeVerbStem {
+            stem = wholeVerbStem
+        }
+        // Prefer an explicitly curated lexical stem.
+        else if let lexicalStem = lexicalStems[word] {
             stem = lexicalStem
+        }
+        // A stripped productive noun ending should reuse an exact dictionary
+        // base when available (pedarha -> پدر‌ها), rather than phonetic fallback.
+        else if let exactDictionaryStem = dictionary.findCandidates(
+            for: word,
+            includeFuzzy: false,
+            limit: 12
+        ).first(where: { candidate in
+            if case .exact = candidate.source { return true }
+            return false
+        }) {
+            stem = exactDictionaryStem.value
         }
         // Check past tense stems
         else if let pastStem = pastTenseStems[word] {
