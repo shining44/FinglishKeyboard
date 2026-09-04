@@ -14,10 +14,64 @@ enum PersianOrthography {
         "مثلا": "مثلاً",
         "اصلا": "اصلاً",
 
+        // Other high-confidence hamza spellings already represented by curated
+        // Latin aliases. Keeping the migration here also repairs generated and
+        // previously learned Persian values.
+        "تایید": "تأیید",
+        "تاثیر": "تأثیر",
+        "تاسیس": "تأسیس",
+        "تامین": "تأمین",
+        "تاخیر": "تأخیر",
+        "تاکید": "تأکید",
+        "تالیف": "تألیف",
+        "تامل": "تأمل",
+        "تاسف": "تأسف",
+        "متاثر": "متأثر",
+        "متاخر": "متأخر",
+        "مساله": "مسئله",
+        "مسول": "مسئول",
+        "مسولیت": "مسئولیت",
+        "موسسه": "مؤسسه",
+        "هیات": "هیئت",
+        "جزیی": "جزئی",
+        "مبدا": "مبدأ",
+        "منشا": "منشأ",
+        "موثر": "مؤثر",
+        "مولف": "مؤلف",
+        "مودب": "مؤدب",
+        "روسا": "رؤسا",
+        "شؤون": "شئون",
+        "جرات": "جرئت",
+        "مامور": "مأمور",
+        "مایوس": "مأیوس",
+        "ماخذ": "مأخذ",
+        "مواخذه": "مؤاخذه",
+        "متاهل": "متأهل",
+
         // Stable compounds and religious expressions.
         "هیچوقت": "هیچ‌وقت",
+        "هیچ وقت": "هیچ‌وقت",
         "آبمیوه": "آب‌میوه",
         "وبسایت": "وب‌سایت",
+        "تخم مرغ": "تخم‌مرغ",
+        "دانش آموز": "دانش‌آموز",
+        "نرم افزار": "نرم‌افزار",
+        "جستجو": "جست‌وجو",
+        "بزرگتر": "بزرگ‌تر",
+        "بزرگترین": "بزرگ‌ترین",
+        "کوچیکتر": "کوچیک‌تر",
+        "کوچیکترین": "کوچیک‌ترین",
+        "خوبتر": "خوب‌تر",
+        "خوبترین": "خوب‌ترین",
+        "گرمتر": "گرم‌تر",
+        "گرمترین": "گرم‌ترین",
+        "راحتتر": "راحت‌تر",
+        "راحتترین": "راحت‌ترین",
+        "آنها": "آن‌ها",
+        "قران": "قرآن",
+        "دقیقن": "دقیقاً",
+        "کاملن": "کاملاً",
+        "رسمن": "رسماً",
         "انشاالله": "ان‌شاءالله",
         "انشالله": "ان‌شاءالله",
         "ماشالله": "ماشاءالله",
@@ -34,10 +88,29 @@ enum PersianOrthography {
         "نمیشی": "نمی‌شی",
         "نمیشه": "نمی‌شه",
 
+        // Legacy colloquial verb tokens that still occur in duplicate aliases
+        // and phrase values. These are deliberately explicit: a blanket rule
+        // for every word beginning in می would corrupt nouns such as میدان,
+        // میوه, میز, and proper names.
+        "میره": "می‌ره",
+        "میرین": "می‌رین",
+        "میده": "می‌ده",
+        "میدی": "می‌دی",
+        "میدیم": "می‌دیم",
+        "میدین": "می‌دین",
+        "میکنه": "می‌کنه",
+        "میکنی": "می‌کنی",
+        "میگه": "می‌گه",
+        "میگی": "می‌گی",
+        "میگم": "می‌گم",
+        "نمیتونم": "نمی‌تونم",
+
         // Colloquial آمدن is written without a fabricated long alef.
         "می‌آم": "میام",
         "می‌آد": "میاد",
         "می‌آی": "میای",
+        "می‌آن": "میان",
+        "بیایین": "بیاین",
     ]
 
     static func canonicalize(_ value: String) -> String {
@@ -47,7 +120,38 @@ enum PersianOrthography {
             .replacingOccurrences(of: "ك", with: "ک")
             .precomposedStringWithCanonicalMapping
 
-        return exactReplacements[normalizedLetters] ?? normalizedLetters
+        if let exactReplacement = exactReplacements[normalizedLetters] {
+            return exactReplacement
+        }
+
+        // Apply the same canonical word migration inside phrases while
+        // preserving whitespace and punctuation verbatim. Whole-string-only
+        // replacement allowed values such as "تبریک میگم" to bypass the same
+        // spelling rule that correctly handled the standalone token "میگم".
+        var result = ""
+        var token = ""
+
+        func flushToken() {
+            guard !token.isEmpty else { return }
+            result += exactReplacements[token] ?? token
+            token.removeAll(keepingCapacity: true)
+        }
+
+        for scalar in normalizedLetters.unicodeScalars {
+            let isWordScalar = CharacterSet.letters.contains(scalar) ||
+                CharacterSet.nonBaseCharacters.contains(scalar) ||
+                scalar.value == 0x200C
+
+            if isWordScalar {
+                token.append(contentsOf: String(scalar))
+            } else {
+                flushToken()
+                result.append(contentsOf: String(scalar))
+            }
+        }
+        flushToken()
+
+        return result
     }
 
     static func skeleton(_ value: String) -> String {
@@ -1819,7 +1923,7 @@ class FinglishDictionary {
             ("inja", ["اینجا"], 95),
             ("injaa", ["اینجا"], 93),
             ("oonja", ["اونجا"], 93),
-            ("unja", ["آنجا"], 90),
+            ("anja", ["آنجا"], 90),
             ("koja", ["کجا"], 95),
             ("hamechi", ["همه‌چی"], 92),
             ("hamechiz", ["همه‌چیز"], 90),
@@ -2014,7 +2118,8 @@ class FinglishDictionary {
             ("follow", ["فالو"], 90),
             ("follower", ["فالوور"], 88),
             ("share", ["شیر"], 85),
-            ("sher", ["شر"], 82),
+            ("shar", ["شر"], 88),
+            ("sharr", ["شر"], 86),
             ("block", ["بلاک"], 88),
             ("unfollow", ["آنفالو"], 85),
             ("dm", ["دی‌ام"], 88),
@@ -3095,7 +3200,7 @@ class FinglishDictionary {
             ("comment", ["کامنت"], 90),
             ("koment", ["کامنت"], 88),
             ("share", ["شیر"], 85),
-            ("sher", ["شیر"], 83),
+            ("sher", ["شعر"], 98),
             ("follow", ["فالو"], 92),
             ("falo", ["فالو"], 90),
             ("unfollow", ["آنفالو"], 85),
@@ -4215,7 +4320,7 @@ class FinglishDictionary {
             ("mishine", ["می‌شینه"], 92),
             ("mishinim", ["می‌شینیم"], 90),
             ("mishinin", ["می‌شینین"], 88),
-            ("nishinan", ["می‌شینن"], 88),
+            ("mishinan", ["می‌شینن"], 88),
             ("neshastam", ["نشستم"], 95),
             ("neshasti", ["نشستی"], 95),
             ("neshast", ["نشست"], 95),
@@ -4619,6 +4724,104 @@ class FinglishDictionary {
             ("agahaneh", ["آگاهانه"], 92),
             ("amiyane", ["عامیانه"], 94),
             ("amiyaneh", ["عامیانه"], 92),
+
+            // Productive endings whose spelling cannot be recovered from a
+            // bare character fallback. In particular, enclitics after ه need
+            // an explicit carrier and ZWNJ rather than direct concatenation.
+            ("ketabhayi", ["کتاب‌هایی"], 96),
+            ("ketabhaei", ["کتاب‌هایی"], 94),
+            ("khaneam", ["خانه‌ام"], 98),
+            ("khaneash", ["خانه‌اش"], 98),
+            ("rafteam", ["رفته‌ام"], 96),
+            ("didei", ["دیده‌ای"], 96),
+
+            // Common words where generic phonetic fallback cannot choose the
+            // correct Persian consonant, hamza, or tanvin. Exact entries keep
+            // these lexical decisions local instead of introducing unsafe
+            // global rewrites such as every final "an" becoming tanvin.
+            ("daghigh", ["دقیق"], 98),
+            ("daghighan", ["دقیقاً"], 98),
+            ("kamelan", ["کاملاً"], 98),
+            ("rasman", ["رسماً"], 96),
+            ("shey", ["شیء"], 96),
+            ("qoran", ["قرآن"], 98),
+            ("etelaat", ["اطلاعات"], 98),
+            ("ertebat", ["ارتباط"], 98),
+            ("entezar", ["انتظار"], 98),
+            ("elm", ["علم"], 96),
+            ("omr", ["عمر"], 96),
+            ("zarf", ["ظرف"], 96),
+            ("mosbat", ["مثبت"], 96),
+            ("ensaf", ["انصاف"], 96),
+            ("ensan", ["انسان"], 98),
+            ("emkan", ["امکان"], 98),
+            ("emza", ["امضا"], 98),
+            ("ehtiyat", ["احتیاط"], 96),
+            ("estelah", ["اصطلاح"], 96),
+            ("dalil", ["دلیل"], 98),
+            ("nazar", ["نظر"], 98),
+            ("darkhast", ["درخواست"], 98),
+            ("vaziyat", ["وضعیت"], 98),
+            ("sharayet", ["شرایط"], 96),
+            ("ahamiyat", ["اهمیت"], 96),
+            ("mozu", ["موضوع"], 98),
+            ("mozoo", ["موضوع"], 96),
+            ("ayande", ["آینده"], 98),
+
+            // Canonical compounds that otherwise fall through to lossy
+            // character-by-character transliteration.
+            ("narmafzar", ["نرم‌افزار"], 98),
+            ("narmafzaar", ["نرم‌افزار"], 96),
+            ("dastneveshte", ["دست‌نوشته"], 96),
+            ("dastneveshteh", ["دست‌نوشته"], 94),
+            ("bikhabar", ["بی‌خبر"], 96),
+            ("beekhabar", ["بی‌خبر"], 94),
+
+            // These Latin typo targets already existed in FinglishConverter,
+            // but had no lexical destination, so their aliases generated a
+            // different Persian word or malformed phrase.
+            ("khandeh", ["خنده"], 96),
+            ("mardom", ["مردم"], 98),
+            ("shookhi kardam", ["شوخی کردم"], 98),
+            ("zaalim", ["ظالم"], 96),
+            ("astaghfurullah", ["استغفرالله"], 96),
+            ("koji", ["کجایی"], 96),
+            ("jonam", ["جونم"], 96),
+            ("yarabb", ["یا رب"], 94),
+            ("jazakallah", ["جزاک‌الله"], 94),
+            ("kia", ["کیا"], 96),
+            ("inha", ["این‌ها"], 96),
+            ("aha", ["آها"], 96),
+            ("tangat", ["تنگت"], 94),
+            ("tangit", ["تنگیت"], 92),
+            ("kesid", ["کشید"], 96),
+            ("kesidam", ["کشیدم"], 96),
+
+            // Formal آمدن completion and corrected colloquial forms.
+            ("miyayand", ["می‌آیند"], 96),
+            // Academy-backed hamza spellings. These aliases are explicit so
+            // genuinely ambiguous Roman forms (for example taamol) remain
+            // alternatives rather than being globally rewritten.
+            ("taakid", ["تأکید"], 98),
+            ("takid", ["تأکید"], 96),
+            ("taalif", ["تألیف"], 96),
+            ("talif", ["تألیف"], 94),
+            ("taammol", ["تأمل"], 96),
+            ("taasof", ["تأسف"], 96),
+            ("moteasser", ["متأثر"], 96),
+            ("moteakher", ["متأخر"], 96),
+            ("moallef", ["مؤلف"], 96),
+            ("moaddab", ["مؤدب"], 96),
+            ("roasa", ["رؤسا"], 96),
+            ("shooun", ["شئون"], 94),
+            ("jorat", ["جرئت"], 96),
+            ("mamoor", ["مأمور"], 96),
+            ("mamur", ["مأمور"], 94),
+            ("mayoos", ["مأیوس"], 96),
+            ("mayus", ["مأیوس"], 94),
+            ("maakhaz", ["مأخذ"], 96),
+            ("makhaz", ["مأخذ"], 94),
+            ("moakhaze", ["مؤاخذه"], 96),
 
             // Keep formal Roman forms formal; colloquial aliases are handled
             // separately by FinglishConverter.
@@ -5180,7 +5383,7 @@ class FinglishDictionary {
             ("chikari", ["چیکاری"], 90),
             ("chize", ["چیزه"], 92),
             ("chizi", ["چیزی"], 95),
-            ("hichchi", ["هیچی"], 95),
+            ("hichchi", ["هیچ‌چی"], 95),
             ("hichi", ["هیچی"], 98),
             ("hamchi", ["همچی"], 90),
             ("hamechiz", ["همه‌چیز"], 88),
@@ -5261,7 +5464,6 @@ class FinglishDictionary {
             ("daadaash", ["داداش"], 96),
             ("brother", ["داداش"], 85),
             ("bro", ["داداش"], 82),
-            ("abi", ["آبجی"], 90),
             ("abji", ["آبجی"], 92),
             ("aabji", ["آبجی"], 90),
             ("sister", ["آبجی"], 85),
@@ -5453,7 +5655,7 @@ class FinglishDictionary {
             ("anja", ["آنجا"], 96),
             ("aanja", ["آنجا"], 96),
             ("khastam", ["خواستم"], 100),
-            ("khasteam", ["خستم"], 96),
+            ("khasteam", ["خسته‌ام"], 96),
 
             // Compressed texting variants for high-frequency verbs
             ("nmidonm", ["نمی‌دونم"], 98),
