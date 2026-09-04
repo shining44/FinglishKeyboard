@@ -1094,13 +1094,24 @@ class FinglishConverter {
                 }
             }
         } else if !isLikelyVerb {
-            // Longest combined endings appear first in nounSuffixes. Remove
-            // exactly one licensed ending: repeated stripping turned rahat+tar
-            // into rah+at+tar and produced راهتتر.
-            for (finglish, farsi) in nounSuffixes {
-                if word.hasSuffix(finglish) && word.count > finglish.count {
-                    suffixes.append(farsi)
-                    word = String(word.dropLast(finglish.count))
+            // Productive noun/adjective endings may stack (ziba+tar+am,
+            // ketab+ha+am). Stop as soon as the remainder is a trusted base;
+            // this preserves those stacks without over-stripping rahat into
+            // rah+at as the old unbounded loop did.
+            var removedSuffixCount = 0
+            while word.count > 2 && removedSuffixCount < 3 {
+                var removedSuffix = false
+                for (finglish, farsi) in nounSuffixes {
+                    if word.hasSuffix(finglish) && word.count > finglish.count {
+                        suffixes.insert(farsi, at: 0)
+                        word = String(word.dropLast(finglish.count))
+                        removedSuffixCount += 1
+                        removedSuffix = true
+                        break
+                    }
+                }
+
+                if !removedSuffix || isTrustedNounBase(word) {
                     break
                 }
             }
@@ -1177,6 +1188,21 @@ class FinglishConverter {
         }
 
         return result
+    }
+
+    private func isTrustedNounBase(_ word: String) -> Bool {
+        if lexicalStems[word] != nil {
+            return true
+        }
+
+        return dictionary.findCandidates(
+            for: word,
+            includeFuzzy: false,
+            limit: 12
+        ).contains { candidate in
+            if case .exact = candidate.source { return true }
+            return false
+        }
     }
 
     /// Check if a word looks like past tense
