@@ -4818,6 +4818,7 @@ class FinglishDictionary {
             ("tangit", ["تنگیت"], 92),
             ("kesid", ["کشید"], 96),
             ("kesidam", ["کشیدم"], 96),
+            ("bastan", ["بستن"], 98),
             ("mishnevam", ["می‌شنوم"], 98),
             ("mishenavam", ["می‌شنوم"], 96),
             ("mishnavam", ["می‌شنوم"], 96),
